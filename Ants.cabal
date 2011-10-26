@@ -51,7 +51,12 @@ Executable Ants
   Main-is: Main.hs             
   
   -- Packages needed in order to build this package.
-  Build-depends:  base >= 4, random >= 1.0, mtl >= 2.0, containers >= 0.4, vector >= 0.7.1.0     
+  Build-depends:  
+      base >= 4, 
+      random >= 1.0, 
+      mtl >= 2.0, 
+      containers >= 0.4, 
+      vector >= 0.7.1.0     
   
   -- Modules not exported by this package.
   Other-modules: Point, AntIO, World       
