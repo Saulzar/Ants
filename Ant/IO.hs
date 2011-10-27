@@ -3,6 +3,7 @@
 module Ant.IO 
     ( GameSettings (..)
     , Content (..)
+    , SquareContent
     , Direction (..)
     , Order 
     , Player
@@ -23,11 +24,14 @@ data Direction = North | East | South | West deriving (Show, Eq, Enum)
 type Player = Int
 
 type Order   = (Point, Direction)
-data Content = Water    !Point
-             | Food     !Point
-             | Hill     !Point !Player
-             | Ant      !Point !Player deriving (Show, Eq)
+data Content = Water   
+             | Food   
+             | Hill  !Player
+             | Ant   !Player 
+             | DeadAnt !Player  
+      deriving (Show, Eq)
 
+type SquareContent = (Point, Content)             
 
 data GameSettings = GameSettings
      { loadTime :: !Int
@@ -88,15 +92,19 @@ readTurn str | ["turn", value] <- (words str) =  maybeRead value
          | otherwise                   = Nothing
 
 
-readContent :: String -> Maybe Content
+readContent :: String -> Maybe SquareContent
 readContent str | (c : args) <- (words str) = (mapM maybeRead args) >>= content' c
                 | otherwise                 = Nothing
     where 
-       content' "a" [x, y, p] = Just $ Ant   (Point x y) p    
-       content' "h" [x, y, p] = Just $ Hill  (Point x y) p
-       content' "w" [x, y]    = Just $ Water (Point x y)
-       content' "f" [x, y]    = Just $ Food  (Point x y)     
+       content' "a" [x, y, p] = at x y (Ant p)    
+       content' "h" [x, y, p] = at x y (Hill p)
+       content' "w" [x, y]    = at x y Water
+       content' "f" [x, y]    = at x y Food
+       content' "d" [x, y, p] = at x y (DeadAnt p)
+            
        content' _   _         = Nothing
+       
+       at x y c = Just (Point x y, c)
 
 
 readLines :: String -> (String -> Maybe a) -> IO [a]
@@ -116,7 +124,7 @@ beginTurn = do
     hFlush stdout
     
 
-gameLoop :: (MonadIO m) => (Int -> [Content] -> m [Order]) ->  m ()
+gameLoop :: (MonadIO m) => (Int -> [SquareContent] -> m [Order]) ->  m ()
 gameLoop turn = do
     
     liftIO beginTurn

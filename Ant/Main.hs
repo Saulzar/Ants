@@ -19,8 +19,8 @@ type Game a = StateT GameState IO a
 data GameState = GameState
     { gameSettings      :: !GameSettings
     
-    , waterSquares      :: U.Vector Bool
-    , visibleSquares    :: U.Vector Bool    
+    , gameMap               :: Map
+    , mapSize              :: Size 
     }
 
 
@@ -28,8 +28,7 @@ data GameState = GameState
 initialState :: GameSettings -> GameState
 initialState settings = GameState 
     { gameSettings    = settings
-    , waterSquares    = (U.replicate mapArea False) 
-    , visibleSquares  = (U.replicate mapArea False)
+    , gameMap         = emptyMap (mapSize settings) 
     }
    
     where
