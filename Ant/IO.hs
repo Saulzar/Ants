@@ -36,12 +36,12 @@ type SquareContent = (Point, Content)
 data GameSettings = GameSettings
      { loadTime :: !Int
      , turnTime :: !Int
-     , mapSize      :: !Size
-     , maxTurns     :: !Int
-     , viewRadius2  :: !Int
+     , mapDimensions :: !Size
+     , maxTurns      :: !Int
+     , viewRadius2   :: !Int
      , attackRadius2 :: !Int
-     , spawnRadius2 :: !Int
-     , playerSeed   :: !Int
+     , spawnRadius2  :: !Int
+     , playerSeed    :: !Int
      }
 
 type Setting = (String, Int)
@@ -50,7 +50,7 @@ makeSettings :: [Setting] -> GameSettings
 makeSettings settings = GameSettings 
     { loadTime          = setting 3000 "loadtime"
     , turnTime          = setting 1000 "turntime"
-    , mapSize           = fromMaybe (Size 60 90) (liftM2 Size (find "cols") (find "rows"))
+    , mapDimensions     = fromMaybe (Size 60 90) (liftM2 Size (find "cols") (find "rows"))
     , maxTurns          = setting 1000 "turns"
     , viewRadius2       = setting 55 "viewradius2"
     , attackRadius2     = setting 5 "attackradius2"

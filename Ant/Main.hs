@@ -10,6 +10,7 @@ import qualified Data.Set as S
 
 import Ant.Point
 import Ant.IO
+import Ant.Map
 
 import System.Random
 
@@ -20,7 +21,6 @@ data GameState = GameState
     { gameSettings      :: !GameSettings
     
     , gameMap               :: Map
-    , mapSize              :: Size 
     }
 
 
@@ -28,11 +28,10 @@ data GameState = GameState
 initialState :: GameSettings -> GameState
 initialState settings = GameState 
     { gameSettings    = settings
-    , gameMap         = emptyMap (mapSize settings) 
+    , gameMap         = emptyMap (mapDimensions settings) 
     }
-   
-    where
-       mapArea = area (mapSize settings) 
+ 
+
     
 main ::  IO ()
 main = do
@@ -43,14 +42,14 @@ main = do
             
             
 isAnt :: Int -> Content -> Bool
-isAnt p (Ant _ p')  = p == p' 
+isAnt p (Ant p')  = p == p' 
 isAnt _ _           = False
           
-processTurn :: Int -> [Content] -> Game [Order]
+processTurn :: Int -> [SquareContent] -> Game [Order]
 processTurn n content = do
     
-    let ants = filter (isAnt 0) content
-    orders <- flip mapM ants $ \(Ant point p) -> do
+    let ants = filter (isAnt 0 . snd) content
+    orders <- flip mapM ants $ \(point, Ant p) -> do
         dir <- liftIO $ fmap toEnum $ randomRIO (0, 3)
         return (point, dir)
         

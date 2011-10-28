@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Ant.Square 
     ( Square
     

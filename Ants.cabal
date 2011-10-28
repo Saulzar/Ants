@@ -56,10 +56,11 @@ Executable Ants
       random >= 1.0, 
       mtl >= 2.0, 
       containers >= 0.4, 
-      vector >= 0.7.1.0     
+      vector >= 0.7.1.0,
+      split >= 0.1
   
   -- Modules not exported by this package.
-  Other-modules: Ant.Point, Ant.IO, Ant.World       
+  Other-modules: Ant.Point, Ant.IO, Ant.Map, Ant.Square       
   
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         

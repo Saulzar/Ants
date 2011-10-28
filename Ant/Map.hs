@@ -1,6 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
 
-
 module Ant.Map where
 
 import qualified Data.Vector.Storable as S
@@ -18,7 +17,6 @@ import Data.List.Split
 import Ant.Point
 import Ant.Square
 import Ant.IO
-
 
 data Map = Map { mapSquares :: S.Vector Square 
                , mapSize    :: !Size
