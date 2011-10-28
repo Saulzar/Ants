@@ -49,8 +49,6 @@ processTurn :: Int -> [SquareContent] -> Game [Order]
 processTurn n content = do
     
     let ants = filter (isAnt 0 . snd) content
-    orders <- flip mapM ants $ \(point, Ant p) -> do
-        dir <- liftIO $ fmap toEnum $ randomRIO (0, 3)
-        return (point, dir)
-        
-    return orders
+    
+    orders <- liftM (map toEnum . randomRs (0, 3)) (liftIO getStdGen)
+    return $ zip (map fst ants) orders
