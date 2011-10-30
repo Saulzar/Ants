@@ -1,6 +1,24 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Ant.Map where
+module Ant.Map 
+    ( Map
+    
+    , fromSquares
+    , emptyMap
+    
+    , noVisibility
+    , visibleSet
+    
+    , updateVisibility
+    , updateContent
+    
+    , indexMap
+    , at
+    , wrapIndex
+    
+    )
+    
+where
 
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Storable.Mutable as SM
@@ -26,9 +44,13 @@ instance Show Map where
     show (Map squares (Size width height)) = concat . intersperse "\n" $ dim : lines
         where
             dim     = show (width, height)
-            lines   = splitEvery width . map tileChar . S.toList $ squares  
+            lines   = splitEvery width . map squareChar . S.toList $ squares  
 
-               
+            
+fromSquares :: Size -> [Square] -> Map
+fromSquares size squares 
+    | length squares == area size = Map (S.fromList squares) size 
+    | otherwise                   = error $ "Mismatched squares creating map " ++ show (length squares)           
           
 emptyMap :: Size -> Map
 emptyMap size = Map (S.replicate (area size) unknownSquare) size

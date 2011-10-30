@@ -15,7 +15,8 @@ module Ant.Square
     , isWater
     , hasFood
     
-    , tileChar
+    , squareChar
+    , charSquare
     
     , setVisibility
     , setContent
@@ -35,7 +36,7 @@ data Square = Square
     { sAnt         :: {-# UNPACK #-} !Word8  
     , sHill        :: {-# UNPACK #-} !Word8
     , sFlags       :: {-# UNPACK #-} !Word16
-    }
+    } deriving Show
 
 -- Instance so we can use Square in a Storable vector
 instance Storable Square where
@@ -58,9 +59,23 @@ instance Storable Square where
     where
       q = castPtr p    
     
-unknownSquare :: Square
+    
+    
+withFlag :: Square -> Word16 -> Square
+withFlag square flag = square { sFlags = (sFlags square) .|. flag } 
+{-# INLINE withFlag #-}   
+    
+-- Constants
+waterSquare, landSquare, foodSquare, unknownSquare :: Square
 unknownSquare = Square noPlayer noPlayer 0
-{-# INLINE unknownSquare #-}         
+waterSquare = unknownSquare `withFlag` (seenFlag .|. waterFlag)
+landSquare  = unknownSquare `withFlag` seenFlag
+foodSquare = landSquare `withFlag` foodFlag
+
+antSquare, hillSquare :: Player -> Square
+antSquare n = landSquare { sAnt = fromIntegral n }
+hillSquare n = landSquare { sHill = fromIntegral n }
+   
          
 -- Interface getters for squares
 squareHill, squareAnt :: Square -> Maybe Player
@@ -84,15 +99,25 @@ hasFood   = (testFlag foodFlag) . sFlags
 {-# INLINE wasSeen #-}
 {-# INLINE hasFood #-} 
         
-tileChar :: Square -> Char
-tileChar square  | not (wasSeen square)  = '?'
-                 | isWater square        = '~'
-                 | (Just hill) <- squareAnt square = chr(ord 'a' + hill) 
-                 | (Just ant) <- squareAnt square  = chr(ord '0' + ant)
-                 | hasFood square    = '#'
-                 | isVisible square  = '.'
-                 | otherwise         = 'o' 
+squareChar :: Square -> Char
+squareChar square  | not (wasSeen square)  = '?'
+                   | isWater square          = '%'
+                   | (Just ant)  <- squareAnt square = chr(ord 'a' + ant) 
+                   | (Just hill) <- squareHill square  = chr(ord '0' + hill)
+                   | hasFood square    = '#'
+                   | isVisible square  = 'o'
+                   | otherwise         = '.' 
 
+                 
+                 
+charSquare :: Char -> Square
+charSquare c | c == '%' = waterSquare 
+             | c == '.' = landSquare
+             | c == '.' = foodSquare
+             | isNumber c =  hillSquare (ord c - ord '0')
+             | isLower  c =  antSquare (ord c - ord 'a')
+             | otherwise = unknownSquare
+                 
 -- Interface setters for squares
 setVisibility :: Bool -> Square -> Square
 setVisibility True (Square _ _ flags) = Square noPlayer noPlayer (resetFlags flags)
@@ -123,13 +148,13 @@ foodFlag    = 8
 {-# INLINE foodFlag #-}
         
 noPlayer :: Word8 
-noPlayer = -1
+noPlayer = 255
 {-# INLINE noPlayer #-}        
         
 -- Helper functions
 maybePlayer :: Word8 -> Maybe Player
-maybePlayer n | n == noPlayer = Just (fromIntegral n)
-         | otherwise     = Nothing
+maybePlayer n | n == noPlayer = Nothing
+              | otherwise     = Just (fromIntegral n)
 {-# INLINE maybePlayer #-}
          
 isPlayer :: Word8 -> Bool
