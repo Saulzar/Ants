@@ -65,3 +65,26 @@ Executable Ants
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
   
+Executable Tests
+  -- .hs or .lhs file containing the Main module.
+  Main-is: Ant/Diagram.hs             
+  
+  -- Packages needed in order to build this package.
+  Build-depends:  
+      base >= 4, 
+      random >= 1.0, 
+      mtl >= 2.0, 
+      containers >= 0.4, 
+      vector >= 0.7.1.0,
+      split >= 0.1,
+      diagrams-cairo >= 0.4,
+      diagrams-lib >= 0.4,
+      colour >= 2.3
+      
+      
+  
+  -- Modules not exported by this package.
+  -- Other-modules: Ant.Point, Ant.IO, Ant.Map, Ant.Square       
+  
+  -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
+  -- Build-tools:         

@@ -34,11 +34,12 @@ readScenario :: FilePath -> IO Map
 readScenario filePath = do
     
     handle <- openFile filePath ReadMode
-    settings <- liftM makeSettings (readLines handle readSetting)
+    settings <- liftM makeSettings (readLinesN 3 handle readSetting)
 
     case settings of 
          Nothing -> error "Error reading scenario settings"
          Just (size, players) -> readSquares size handle
+               
                
 makeSettings :: [Setting] -> Maybe (Size, Int)
 makeSettings settings = do
