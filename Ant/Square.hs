@@ -3,8 +3,6 @@
 module Ant.Square 
     ( Square
     
-    , unknownSquare
-
     , squareHill
     , squareAnt 
     
@@ -14,12 +12,20 @@ module Ant.Square
     , wasSeen
     , isWater
     , hasFood
+    , isLand
     
     , squareChar
     , charSquare
     
     , setVisibility
     , setContent
+    
+    , waterSquare
+    , landSquare
+    , foodSquare
+    , unknownSquare
+    , antSquare
+    , hillSquare
     
     )
 where
@@ -85,19 +91,22 @@ squareAnt  = maybePlayer . sAnt
 {-# INLINE squareAnt #-}
 
 
-isHill, isAnt, isVisible, wasSeen, isWater, hasFood :: Square -> Bool
+isHill, isAnt, isVisible, wasSeen, isWater, hasFood, isLand :: Square -> Bool
 isHill    = isPlayer . sHill  
 isAnt     = isPlayer . sAnt   
 isWater   = (testFlag waterFlag) . sFlags       
 isVisible = (testFlag visibleFlag) . sFlags     
 wasSeen   = (testFlag seenFlag) . sFlags     
 hasFood   = (testFlag foodFlag) . sFlags   
+isLand sq = wasSeen sq && not (isWater sq)
+
 {-# INLINE isHill #-}
 {-# INLINE isWater #-} 
 {-# INLINE isAnt #-}
 {-# INLINE isVisible #-}
 {-# INLINE wasSeen #-}
 {-# INLINE hasFood #-} 
+{-# INLINE isLand #-} 
         
 squareChar :: Square -> Char
 squareChar square  | not (wasSeen square)  = '?'

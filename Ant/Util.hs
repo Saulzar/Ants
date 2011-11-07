@@ -6,6 +6,7 @@ module Ant.Util
     
     , Setting
     , readSetting
+    , readLinesN
     )
     
 where

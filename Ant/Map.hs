@@ -3,6 +3,8 @@
 module Ant.Map 
     ( Map
     
+    , mapSize
+    
     , fromSquares
     , emptyMap
     
@@ -12,10 +14,19 @@ module Ant.Map
     , updateVisibility
     , updateContent
     
-    , indexMap
+    , fromIndex
+    , toIndex
+    
     , at
     , wrapIndex
+    , fromFunction
     
+    , atIndex   
+    , neighbors 
+    , neighborIndices  
+    
+    , findSquareBy
+    , rectIndices
     )
     
 where
@@ -52,8 +63,13 @@ fromSquares size squares
     | length squares == area size = Map (S.fromList squares) size 
     | otherwise                   = error $ "Mismatched squares creating map " ++ show (length squares)           
           
-emptyMap :: Size -> Map
-emptyMap size = Map (S.replicate (area size) unknownSquare) size
+emptyMap :: Square -> Size -> Map
+emptyMap square size = Map (S.replicate (area size) square) size
+
+
+
+fromFunction :: Size -> (Point -> Square) -> Map
+fromFunction size@(Size x y) f = Map (S.generate (area size) (\i -> let (sx, sy) = i `divMod` x in f (Point sx sy))) size
 
 noVisibility :: Size -> U.Vector Bool
 noVisibility size = (U.replicate (area size) False)
@@ -81,21 +97,57 @@ updateContent :: [SquareContent] -> Map -> Map
 updateContent content (Map squares size) =  Map (S.modify updateSquares squares) size 
     where
         updateSquares v = flip mapM_ content  $ \(point, c) -> do
-            let index = size `indexMap` point
+            let index = size `toIndex` point
             SM.unsafeWrite v index (setContent c $ squares `S.unsafeIndex` index) 
                
+
+rectIndices :: Size -> Point -> Size -> [Int]
+rectIndices (Size width height) (Point px py) (Size rh rw) = do
+    x <- [xu `mod` width  | xu <- [px .. px + rh - 1]]
+    y <- [yu `mod` height | yu <- [py .. py + rh - 1]]    
+    
+    return (y * width + x) 
+        
+                              
+findSquareBy :: Map -> (Square -> Bool) -> Point -> Size -> Maybe Point
+findSquareBy world f origin size =  fmap (fromIndex (mapSize world)) (find f' indices)
+    where
+        f' i = f (world `atIndex` i)
+        indices = rectIndices (mapSize world) origin size
+
     
 wrapIndex :: Size -> Point -> Int
 wrapIndex (Size width height) (Point x y) = (y `mod` height) * width + x `mod` width
 {-# INLINE wrapIndex #-}
 
-indexMap :: Size -> Point -> Int
-indexMap (Size width height) (Point x y) = y * width + x
-{-# INLINE indexMap #-}
+
+fromIndex :: Size -> Int -> Point
+fromIndex (Size width _) index = Point x y where
+    (y, x) = index `divMod` width
+{-# INLINE fromIndex #-}
+        
+neighbors :: Point -> [Point]
+neighbors (Point x y) = 
+    [ Point (x - 1) y
+    , Point (x + 1) y
+    , Point x (y - 1)
+    , Point x (y + 1)
+    ]
+    
+    
+neighborIndices :: Size -> Int -> [Int]
+neighborIndices size index = map (wrapIndex size) (neighbors point) where
+    point = fromIndex size index
+        
+toIndex :: Size -> Point -> Int
+toIndex (Size width height) (Point x y) = y * width + x
+{-# INLINE toIndex #-}
 
 at :: Map -> Point -> Square
 at (Map squares size) point =  squares `S.unsafeIndex` (size `wrapIndex` point)
 {-# INLINE at #-}
 
 
-
+atIndex :: Map -> Int -> Square
+atIndex (Map squares _) index =  squares `S.unsafeIndex` index
+{-# INLINE atIndex #-}

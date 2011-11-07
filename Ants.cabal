@@ -46,28 +46,31 @@ Build-type:          Simple
 Cabal-version:       >=1.2
 
 
-Executable Ants
+-- Executable Ants
   -- .hs or .lhs file containing the Main module.
-  Main-is: Ant/Main.hs             
+--  Main-is: Ant/Main.hs             
   
   -- Packages needed in order to build this package.
-  Build-depends:  
-      base >= 4, 
-      random >= 1.0, 
-      mtl >= 2.0, 
-      containers >= 0.4, 
-      vector >= 0.7.1.0,
-      split >= 0.1
+--  Build-depends:  
+--      base >= 4, 
+--      random >= 1.0, 
+--      mtl >= 2.0, 
+--      containers >= 0.4, 
+--      vector >= 0.7.1.0,
+--      split >= 0.1
   
   -- Modules not exported by this package.
-  Other-modules: Ant.Point, Ant.IO, Ant.Map, Ant.Square       
-  
+--  Other-modules: Ant.Point, Ant.IO, Ant.Map, Ant.Square       
+
+--  ghc-options: -fllvm -O2 
+  -- -static -optl-pthread -optl-static
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
-  
-Executable Tests
+
+ 
+Executable Debugger
   -- .hs or .lhs file containing the Main module.
-  Main-is: Ant/Diagram.hs             
+  Main-is: Ant/Debugger.hs             
   
   -- Packages needed in order to build this package.
   Build-depends:  
@@ -77,10 +80,12 @@ Executable Tests
       containers >= 0.4, 
       vector >= 0.7.1.0,
       split >= 0.1,
-      diagrams-cairo >= 0.4,
-      diagrams-lib >= 0.4,
+      cairo >= 0.12.1,
+      gtk   >= 0.12.1,
       colour >= 2.3
       
+      
+  ghc-options: -threaded -fllvm -O2
       
   
   -- Modules not exported by this package.

@@ -9,6 +9,7 @@ module Ant.IO
     , Player
     , readSettings
     , gameLoop
+    , defaultSettings
     )
     
 where
@@ -43,6 +44,10 @@ data GameSettings = GameSettings
      , spawnRadius2  :: !Int
      , playerSeed    :: !Int
      }
+     
+
+defaultSettings :: GameSettings
+defaultSettings = makeSettings []
 
 makeSettings :: [Setting] -> GameSettings
 makeSettings settings = GameSettings 
