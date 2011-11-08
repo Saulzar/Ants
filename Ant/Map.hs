@@ -27,6 +27,9 @@ module Ant.Map
     
     , findSquareBy
     , rectIndices
+    
+    , manhatten
+    , manhattenIndex
     )
     
 where
@@ -75,7 +78,7 @@ noVisibility :: Size -> U.Vector Bool
 noVisibility size = (U.replicate (area size) False)
 
 visibleSet :: Size -> Int -> [Point] -> U.Vector Bool
-visibleSet size radius ants = runST $ do
+visibleSet size radiusSq ants = runST $ do
         v <- UM.replicate (area size) False
         
         flip mapM_ ants  $ \ant ->
@@ -85,7 +88,7 @@ visibleSet size radius ants = runST $ do
         U.unsafeFreeze v
     where
         offsets = [Size x y | x <- [-radius..radius], y <- [-radius..radius],  x * x + y * y <= radiusSq]
-        radiusSq = radius * radius
+        radius = ceiling (sqrt (fromIntegral radiusSq))
  
 
 updateVisibility :: U.Vector Bool -> Map -> Map
@@ -133,7 +136,17 @@ neighbors (Point x y) =
     , Point x (y - 1)
     , Point x (y + 1)
     ]
+
+manhatten :: Size -> Point -> Point -> Int
+manhatten (Size width height) (Point x1 y1) (Point x2 y2) = dx  + dy
+     where
+        dx = min ((x1 - x2) `mod` width) ((x2 - x1) `mod` width) 
+        dy = min ((y1 - y2) `mod` height) ((y2 - y1) `mod` height)
+{-# INLINE manhatten #-}       
     
+manhattenIndex :: Size -> Int -> Int -> Int
+manhattenIndex size p1 p2 = manhatten size (fromIndex size p1) (fromIndex size p2)  
+{-# INLINE manhattenIndex #-}    
     
 neighborIndices :: Size -> Int -> [Int]
 neighborIndices size index = map (wrapIndex size) (neighbors point) where

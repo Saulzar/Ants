@@ -54,8 +54,8 @@ worldColour world p = squareColour (world `at` p)
 
 
 graphColours :: Map -> Graph -> Point -> Colour Double
-graphColours world graph p   | isWater square   = blue
-                             | region < 0       = black
+graphColours world graph p   | isWater square   = black
+                             | region < 0       = white
                              | otherwise        = blend scale black regionColour  
      where                   
 

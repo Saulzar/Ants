@@ -23,8 +23,10 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
-import qualified Data.Map as M
+import qualified Data.IntMap as M
 import qualified Data.Sequence as S
+
+import Data.List
 
 import Control.Monad
 
@@ -42,7 +44,7 @@ type Sq = (PointIndex, Distance)
 
 -- Data structures for doing bredth first search
 type DistanceMap = U.Vector (RegionIndex, Distance)
-type Set = M.Map PointIndex Distance  
+type Set = M.IntMap Distance  
 type Queue = S.Seq Sq 
 
 data Graph = Graph
@@ -54,14 +56,15 @@ data Graph = Graph
     
     
 data Region = Region 
-     {  openSquares   :: Set
+     {  regionSquares :: Set
+     ,  openSquares   :: [Sq]
      ,  regionId      :: RegionIndex
      } deriving Show
      
      
 emptyGraph :: Size -> Int -> Graph
 emptyGraph size distance = Graph 
-    { regionMap = (U.replicate (area size) (-1, distance)) 
+    { regionMap = (U.replicate (area size) (-1, 1000 )) 
     , regions   = V.empty     
     , graphSize = size
     , regionDistance = distance
@@ -71,34 +74,27 @@ emptyGraph size distance = Graph
 --addSplits :: Map -> Graph -> Graph
 --addSplits world graph =      
 updateGraph :: Map -> Graph -> Graph
-updateGraph world graph = graph'
+updateGraph world graph = graph''
     where
-        (graph', updates) = expandRegions world graph
-     
-expandRegions :: Map -> Graph -> (Graph, SquareUpdates)
-expandRegions world graph = (graph', squareUpdates) 
-
-    where
-          graph' = graph 
-              { regionMap = writeToMap squareUpdates (regionMap graph) 
-              , regions   = updateBy (regions graph) regions' regionId
-              } 
+        graph' = expandRegions world graph
+    
+        seeds = findSeeds world graph'
+        graph'' = traceShow seeds $ foldl ((fst .) . addRegion world) graph' seeds
         
-          (regions', squareUpdates) = (unzip . map updateOpen) (V.toList (regions graph))
-          updateOpen region = (region', (regionId region, squareSet)) 
-              where
-                  region' = region { openSquares = openSquares' }
-                  (openSquares', squareSet) = expandSquares graph world (openSquares region) 
-     
-type SquareUpdates = [(RegionIndex, Set)]    
-     
-findSplits :: Map -> Graph -> SquareUpdates -> [PointIndex]
-findSplits world graph updates = []
-    where
         
-        candidates = filter isSplitPoint  (concatMap (M.toList . snd) updates)
-        isSplitPoint (p, d) = d == (regionDistance graph - 1)     
      
+expandRegions :: Map -> Graph -> Graph
+expandRegions world graph = graph 
+      { regionMap = writeToMap regions' (regionMap graph) 
+      , regions   = updateBy (regions graph) regions' regionId
+      } 
+      where        
+          openRegions = filter isOpen (V.toList (regions graph))         
+          regions' = map (expandRegion (regionDistance graph) world) openRegions 
+     
+isOpen :: Region -> Bool
+isOpen = not . null . openSquares   
+{-# INLINE isOpen #-}
      
 addRegion ::  Map -> Graph -> PointIndex -> (Graph, Region)
 addRegion world graph centre = (graph', region)
@@ -107,76 +103,90 @@ addRegion world graph centre = (graph', region)
     
         regionIndex = V.length (regions graph)
         region  = Region 
-            { openSquares   = M.singleton centre 0  
-            , regionId = V.length (regions graph)
+            { openSquares   = [(centre, 0)]  
+            , regionId      = V.length (regions graph)
+            , regionSquares = M.empty
             }
              
+findSeeds :: Map -> Graph -> [PointIndex]
+findSeeds world graph =  separate (manhattenIndex (mapSize world)) (regionDistance graph) valid
+    where
+        valid = map fst (U.toList (U.filter validSquare squares)) 
+        validSquare (p, d) = d == (regionDistance graph)
+        
+        squares = U.imap (\p (r, d) -> (p, d)) (regionMap graph)
 
+separate :: (a -> a -> Int) -> Int -> [a] -> [a]        
+separate metric distance = foldl' add []
+     where
+        add seeds p | all (apart p) seeds = p : seeds 
+                    | otherwise            = seeds
+
+        apart p1 p2 = distance < metric p1 p2
+{-# INLINE separate #-}       
+
+            
 graphSquare :: Graph -> Point ->  (RegionIndex, Distance)   
 graphSquare graph p = (regionMap graph) `U.unsafeIndex` (wrapIndex (graphSize graph) p)  
-     
+{-# INLINE graphSquare #-}       
      
 updateBy :: V.Vector a -> [a] -> (a -> Int) -> V.Vector a
 updateBy v updates f =  v V.// map (\x -> (f x, x)) updates     
      
-writeToMap :: SquareUpdates -> DistanceMap -> DistanceMap
-writeToMap regions' distanceMap =  U.modify updateSq distanceMap
+writeToMap :: [Region] -> DistanceMap -> DistanceMap
+writeToMap regions distanceMap =  U.modify updateSq distanceMap
     where
-        updateSq v = forM_ regions' $ \(region, set) -> do
-            forM_ (M.toList set) $ \(p, d) -> do
-                (region', d') <- UM.unsafeRead v p
-                when (d < d') $ UM.unsafeWrite v p (region, d)
+        updateSq v = forM_ regions $ \region -> do
+            forM_ (M.toList (regionSquares region)) $ \(p, d) -> do
+                (_, d') <- UM.unsafeRead v p
+                when (d < d') $ UM.unsafeWrite v p (regionId region, d)
+
+                
+type GetSuccessors = Set -> Sq -> ([Sq], [Sq])                        
         
-        
-bfs :: (Set -> Sq -> ([Sq], [Sq])) -> Queue -> Set -> Set -> (Set, Set)
-bfs successors queue open set = bfs' (S.viewl queue) open set   
+bfs :: GetSuccessors -> Queue -> Set -> Set -> (Set, Set)
+bfs successors queue unseen set = bfs' (S.viewl queue) unseen set   
     where        
-        bfs' S.EmptyL            open set  = (open, set)
-        bfs' ((p, d) S.:< queue) open set  =  bfs' (S.viewl queue') open' set'
+        bfs' S.EmptyL            unseen set  =   (set, unseen)
+        bfs' ((p, d) S.:< queue) unseen set  =   bfs' (S.viewl queue') unseen' set'
                                  
             where
-                (next, unseen)   = successors set (p, d)
+                (next, hidden)   = successors set (p, d)
                 
                 queue' = foldl (S.|>) queue next
-                set'   = foldr (uncurry M.insert) set (unseen ++ next)  
-                open'  = foldr (uncurry M.insert) open unseen
+                set'   = foldr (uncurry M.insert) set (hidden ++ next)  
+                unseen'  = foldr (uncurry M.insert) unseen hidden
      
-
+  
      
-     
---expandRegion :: Int -> World -> Region -> Region
---expandRegion distance world region =      
-     
-expandSquares :: Graph -> Map -> Set -> (Set, Set)
-expandSquares graph world open = bfs successors queue open' set
+expandRegion :: Int -> Map -> Region -> Region
+expandRegion distance world region = region 
+    { regionSquares = squares'
+    ,  openSquares   = M.toList open'
+    }   
         
     where 
+        
+        (squares', open') = bfs successors queue unseen (regionSquares region)
     
-        successors :: Set -> Sq -> ([Sq], [Sq])               
-        successors set (p, d) | d < (regionDistance graph)    = (next, unseen) 
-                              | otherwise                     = ([], [])
+        successors :: GetSuccessors              
+        successors set (p, d) | d < distance    = (next, unseen) 
+                              | otherwise       = ([], [])
             where
-                neighbors = neighborIndices size p 
+                neighbors = neighborIndices (mapSize world) p 
                 incDistance p = (p, d + 1)
                 
                 next =  (map incDistance . filter isSuccessor)  neighbors
                 unseen = (map incDistance . filter isUnknown)  neighbors
-                
-                (r, existing) = (regionMap graph) `U.unsafeIndex` p
-                
+                                
                 isUnknown = not . wasSeen . (world `atIndex`)
                 isSuccessor p = isLand (world `atIndex` p)        -- Land and not water (and we've seen it before)
                               && (M.notMember p set)              -- Not already visited
-                              && (d < existing) 
                               
         -- Starting condition
-        filterAt f = M.filterWithKey (\p d -> f (world `atIndex` p))
-        
-        openList = filterAt isLand open
-        
-        queue = S.fromList (M.toList openList) 
-        open'  = filterAt (not . wasSeen) open
-        set   = M.empty 
-        
-        size   = mapSize world
+        filterOpen f = filter (\(p, _) -> f (world `atIndex` p)) (openSquares region) 
+ 
+        queue   = S.fromList (filterOpen isLand) 
+        unseen  = M.fromList (filterOpen (not . wasSeen))
+
         

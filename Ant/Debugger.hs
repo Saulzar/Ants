@@ -12,20 +12,24 @@ import Ant.Renderer
 
 import qualified Data.Map as M
 
-{-
-createMap :: Map
-createMap = fromFunction (Size 40 40) f where
-    f (Point x y) | x == 1 || x == 38 = waterSquare
-                  | y == 1 || y == 38 = waterSquare
-                  | otherwiscenario <- readScenario "maps/maze/maze_02p_01.map"se = landSquare
 
-   -}
+createMap :: Map
+createMap = fromFunction (Size 400 400) f where
+    f (Point x y) | x == 1 || x == 398 = waterSquare
+                  | y == 1 || y == 398 = waterSquare
+                  | otherwise = landSquare
+
+   
 
 testState :: IO GameState
 testState = do
-    scenario <- readScenario "maps/maze/maze_02p_01.map"
+    --scenario <- readScenario "maps/random_walk/random_walk_08p_01.map"
+    --scenario <- readScenario "maps/maze/maze_02p_01.map"
+    --maps/multi_hill_maze/ maze_08p_01.map
+   
+    let scenario = createMap 
     
-    let graph  = emptyGraph (mapSize scenario) 10
+    let graph  = emptyGraph (mapSize scenario) 16
     let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
     let (graph'', r) = addRegion scenario graph' (toIndex (mapSize scenario) (Point 66 41))
     
@@ -36,11 +40,19 @@ testState = do
     print (mapSize scenario)
     
     --print (regionSquares r)
-
+    
+    let graph3 = updateGraph scenario graph''
+    let graph4 = updateGraph scenario graph3
+    let graph5 = updateGraph scenario graph4
+    let graph6 = updateGraph scenario graph5
+    let graph7 = updateGraph scenario graph6
+    
+    let graph8 = iterate (updateGraph scenario) graph4
+        
     return GameState
         { gameSettings = defaultSettings
         , gameMap      = scenario
-        , gameGraph    = updateGraph scenario graph''
+        , gameGraph    = graph8 !! 20
         }
         
         
