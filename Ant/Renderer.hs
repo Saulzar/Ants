@@ -16,7 +16,7 @@ import Data.Colour.RGBSpace.HSV
 import Data.Colour
 
 colourSet ::  Int -> Colour Double
-colourSet i = makeRGB (fromIntegral (i * 105 `mod` 360))  
+colourSet i = makeRGB (fromIntegral (i * 103 `mod` 360))  
   where
       makeRGB hue = uncurryRGB sRGB (hsv hue 1 1)
   

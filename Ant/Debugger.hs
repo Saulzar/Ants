@@ -12,22 +12,19 @@ import Ant.Renderer
 
 import qualified Data.Map as M
 
-
+{-
 createMap :: Map
-createMap = fromFunction (Size 400 400) f where
-    f (Point x y) | x == 1 || x == 398 = waterSquare
-                  | y == 1 || y == 398 = waterSquare
-                  | otherwise = landSquare
+createMap = fromFunction (Size 40 40) f where
+    f (Point x y) | x == 1 || x == 38 = waterSquare
+                  | y == 1 || y == 38 = waterSquare
+                  | otherwiscenario <- readScenario "maps/maze/maze_02p_01.map"se = landSquare
 
-   
+   -}
 
 testState :: IO GameState
 testState = do
     --scenario <- readScenario "maps/random_walk/random_walk_08p_01.map"
-    --scenario <- readScenario "maps/maze/maze_02p_01.map"
-    --maps/multi_hill_maze/ maze_08p_01.map
-   
-    let scenario = createMap 
+    scenario <- readScenario "maps/maze/maze_02p_01.map"
     
     let graph  = emptyGraph (mapSize scenario) 16
     let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
