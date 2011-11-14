@@ -2,6 +2,9 @@
 
 module Ant.Graph
     ( Graph
+    , regions
+    , graphSize
+    
     , Region (..)
 
     , RegionIndex
@@ -85,7 +88,7 @@ emptyGraph size distance = Graph
      
   
 updateGraph :: Map -> Graph -> Graph
-updateGraph world graph = foldl' (expandRegion world) graph open
+updateGraph world graph = traceShow open $ foldl' (expandRegion world) graph open
     where
         open = map (regions graph V.!) $ IS.toList (openRegions graph)
         
@@ -196,14 +199,13 @@ searchRegion distance world regions region = search successors takeOne (searchFr
                      , unseenSquares  = unseenSquares state || any isUnknown neighbors
                      , searchQueue    = foldl' (S.|>) (searchQueue state) next
                      }
-                
             
             neighbors = neighborIndices (mapSize world) p 
             incDistance p = (p, d + 1)
-            
+            	
             next =  (map incDistance . filter isSuccessor)  neighbors
             isUnknown = not . wasSeen . (world `atIndex`)
-            
+			          
             isSuccessor p = isLand (world `atIndex` p)                -- Land and not water (and we've seen it before)
                           && (M.notMember p (visitedSquares state))   -- Not already visited
                           && ((regionId region) == r' || d < d')

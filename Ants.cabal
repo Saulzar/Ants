@@ -80,12 +80,12 @@ Executable Debugger
       containers >= 0.4, 
       vector >= 0.7.1.0,
       split >= 0.1,
-      cairo >= 0.12.1,
-      gtk   >= 0.12.1,
+      cairo >= 0.12.2,
+      gtk   >= 0.12.2,
       colour >= 2.3
       
       
-  ghc-options: -threaded -fllvm -O2
+  ghc-options: -threaded -O1
       
   
   -- Modules not exported by this package.

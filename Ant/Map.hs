@@ -124,10 +124,7 @@ wrapIndex (Size width height) (Point x y) = (y `mod` height) * width + x `mod` w
 {-# INLINE wrapIndex #-}
 
 
-fromIndex :: Size -> Int -> Point
-fromIndex (Size width _) index = Point x y where
-    (y, x) = index `divMod` width
-{-# INLINE fromIndex #-}
+
         
 neighbors :: Point -> [Point]
 neighbors (Point x y) = 
@@ -137,16 +134,31 @@ neighbors (Point x y) =
     , Point x (y + 1)
     ]
 
-manhatten :: Size -> Point -> Point -> Int
-manhatten (Size width height) (Point x1 y1) (Point x2 y2) = dx  + dy
+    
+difference :: Size -> Point -> Point -> Size
+difference (Size width height) (Point x1 y1) (Point x2 y2) = Size dx dy
      where
         dx = min ((x1 - x2) `mod` width) ((x2 - x1) `mod` width) 
-        dy = min ((y1 - y2) `mod` height) ((y2 - y1) `mod` height)
+        dy = min ((y1 - y2) `mod` height) ((y2 - y1) `mod` height)    
+{-# INLINE difference #-}       
+        
+manhatten :: Size -> Point -> Point -> Int
+manhatten size p1 p2 | (Size dx dy) <- difference size p2 p2 = dx  + dy        
 {-# INLINE manhatten #-}       
     
 manhattenIndex :: Size -> Int -> Int -> Int
 manhattenIndex size p1 p2 = manhatten size (fromIndex size p1) (fromIndex size p2)  
 {-# INLINE manhattenIndex #-}    
+
+
+distanceSq :: Size -> Point -> Point -> Int
+distanceSq size p1 p2 | (Size dx dy) <- difference size p2 p2 = dx  + dy        
+{-# INLINE distanceSq #-}      
+    
+distanceSqIndex :: Size -> Int -> Int -> Int
+distanceSqIndex size p1 p2 = distanceSq size (fromIndex size p1) (fromIndex size p2)  
+{-# INLINE distanceSqIndex #-}  
+
     
 neighborIndices :: Size -> Int -> [Int]
 neighborIndices size index = map (wrapIndex size) (neighbors point) where
@@ -155,6 +167,11 @@ neighborIndices size index = map (wrapIndex size) (neighbors point) where
 toIndex :: Size -> Point -> Int
 toIndex (Size width height) (Point x y) = y * width + x
 {-# INLINE toIndex #-}
+
+fromIndex :: Size -> Int -> Point
+fromIndex (Size width _) index = Point x y where
+    (y, x) = index `divMod` width
+{-# INLINE fromIndex #-}
 
 at :: Map -> Point -> Square
 at (Map squares size) point =  squares `S.unsafeIndex` (size `wrapIndex` point)

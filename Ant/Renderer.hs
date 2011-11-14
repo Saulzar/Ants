@@ -1,9 +1,11 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, PatternGuards #-}
 
 module Ant.Renderer where
 
 import Control.Monad
 import Graphics.Rendering.Cairo
+
+import qualified Data.Vector as V
 
 import Ant.Game
 
@@ -15,10 +17,7 @@ import Data.Colour.RGBSpace.HSV
 
 import Data.Colour
 
-colourSet ::  Int -> Colour Double
-colourSet i = makeRGB (fromIntegral (i * 103 `mod` 360))  
-  where
-      makeRGB hue = uncurryRGB sRGB (hsv hue 1 1)
+
   
 setColour :: Colour Double -> Render ()
 setColour c =  setSourceRGB r g b where
@@ -53,16 +52,37 @@ worldColour world p = squareColour (world `at` p)
 {-# INLINE worldColour #-}
 
 
+regionColour ::  Int -> Colour Double
+regionColour i = makeRGB (fromIntegral (i * 103 `mod` 360))  
+  where
+      makeRGB hue = uncurryRGB sRGB (hsv hue 1 1)
+
+      
+circle :: Point -> Double -> Render ()
+circle (Point x y) r = arc (fromIntegral x) (fromIntegral y) r 0 (pi * 2.0)        
+{-# INLINE circle #-}
+
+renderGraph :: Graph -> Render()
+renderGraph graph = do      
+
+    setColour darkseagreen
+
+    V.forM_ (regions graph) $ \r -> do 
+        let p = fromIndex  (graphSize graph) (regionCentre r)
+        circle p 1.0 
+        fill
+      
+      
 graphColours :: Map -> Graph -> Point -> Colour Double
-graphColours world graph p   | isWater square   = black
+graphColours world graph p   | isWater square   = blue
                              | region < 0       = white
-                             | otherwise        = blend scale black regionColour  
+                             | otherwise        = blend scale burlywood baseColour  
      where                   
 
         square = world `at` p
         (region, distance) = graph `graphSquare` p 
         
         scale = fromIntegral distance / fromIntegral (regionDistance graph)
-        regionColour = colourSet region 
+        baseColour = regionColour region 
     
 {-# INLINE graphColours #-}

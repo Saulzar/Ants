@@ -6,50 +6,56 @@ import Graphics.Rendering.Cairo
 import Control.Monad
 
 import Control.Concurrent
+import Data.List
 
 import Ant.Game
 import Ant.Renderer
 
 import qualified Data.Map as M
 
-{-
 createMap :: Map
-createMap = fromFunction (Size 40 40) f where
-    f (Point x y) | x == 1 || x == 38 = waterSquare
-                  | y == 1 || y == 38 = waterSquare
-                  | otherwiscenario <- readScenario "maps/maze/maze_02p_01.map"se = landSquare
+createMap = fromFunction (Size 100 100) f where
+    f (Point x y) | x == 1 || x == 98 = waterSquare
+                  | y == 1 || y == 98 = waterSquare
+                  | otherwise = landSquare
 
-   -}
+   
 
 testState :: IO GameState
 testState = do
     --scenario <- readScenario "maps/random_walk/random_walk_08p_01.map"
-    scenario <- readScenario "maps/maze/maze_02p_01.map"
+    scenario <- readScenario "maps/maze/maze_08p_01.map"
+    --let scenario = createMap
     
-    let graph  = emptyGraph (mapSize scenario) 16
-    let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
-    let (graph'', r) = addRegion scenario graph' (toIndex (mapSize scenario) (Point 66 41))
+    let graph  = emptyGraph (mapSize scenario) 10
+    
+    let (Size w h) = (mapSize scenario)
+    
+    let points = [Point x y | x <- [0, 8 .. w], y <- [0, 8 .. h]]
+    let indices = map (toIndex (mapSize scenario)) points
+    let graph' = foldl' ((fst .) . addRegion scenario) graph indices
+    
+    print points
+    
+    
+--    let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
+--    let (graph'', r) = addRegion scenario graph' (toIndex (mapSize scenario) (Point 66 41))
     
     
     --print (map (\(p, d) -> fromIndex (mapSize scenario) p)  (M.toList (regionSquares r) ))
     
-    print (isWater (scenario `at` (Point 16 11)))
+    
     print (mapSize scenario)
     
     --print (regionSquares r)
+       
     
-    let graph3 = updateGraph scenario graph''
-    let graph4 = updateGraph scenario graph3
-    let graph5 = updateGraph scenario graph4
-    let graph6 = updateGraph scenario graph5
-    let graph7 = updateGraph scenario graph6
-    
-    let graph8 = iterate (updateGraph scenario) graph4
+    let graphs = iterate (updateGraph scenario) graph'
         
     return GameState
         { gameSettings = defaultSettings
         , gameMap      = scenario
-        , gameGraph    = graph8 !! 20
+        , gameGraph    = graphs !! 20
         }
         
         
@@ -60,8 +66,8 @@ main = do
      initGUI
      window <- windowNew
      set window [windowTitle := "Hello Cairo",
-                 windowDefaultWidth := 300, windowDefaultHeight := 200,
-                 containerBorderWidth := 30 ]
+                 windowDefaultWidth := 800, windowDefaultHeight := 600,
+                 containerBorderWidth := 10 ]
 
      frame <- frameNew
      containerAdd window frame
@@ -91,6 +97,8 @@ withTransform r = do
     r
     setMatrix m
     
+ 
+    
 renderInWindow :: DrawableClass drawable => drawable -> GameState -> IO ()
 renderInWindow win state = do 
     (width, height) <- drawableGetSize win
@@ -112,7 +120,8 @@ renderInWindow win state = do
         scale s s
 
         --renderMap (worldColour world) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
-        renderMap (graphColours world graph) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
+        renderMap (graphColours world graph) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))      
+        renderGraph graph 
         
         setSourceRGB 0 0 0 
         setLineWidth (2.0 / s)
