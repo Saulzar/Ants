@@ -41,6 +41,7 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
 import Control.Monad.ST
+import Control.Arrow (&&&)
 
 import Data.List
 import Data.List.Split
@@ -59,6 +60,8 @@ instance Show Map where
         where
             dim     = show (width, height)
             lines   = splitEvery width . map squareChar . S.toList $ squares  
+
+
 
             
 fromSquares :: Size -> [Square] -> Map
@@ -89,8 +92,8 @@ visibleSet size radiusSq ants = runST $ do
     where
         offsets = [Size x y | x <- [-radius..radius], y <- [-radius..radius],  x * x + y * y <= radiusSq]
         radius = ceiling (sqrt (fromIntegral radiusSq))
- 
 
+    
 updateVisibility :: U.Vector Bool -> Map -> Map
 updateVisibility vis (Map squares size) = Map squares' size 
     where
