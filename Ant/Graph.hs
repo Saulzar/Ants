@@ -71,6 +71,7 @@ data Graph = Graph
 data Region = Region 
      {  regionCentre  :: PointIndex
      ,  regionId      :: RegionIndex
+     ,  regionNeighbors :: M.IntMap [PointIndex]
      } deriving Show
      
      
@@ -132,6 +133,7 @@ data SearchState = SearchState
     { visitedSquares :: Set
     , unseenSquares  :: !Bool
     , searchQueue    :: Queue
+    , neighbourSquares :: [(RegionIndex, PointIndex)] 
     }    
                 
 search :: (SearchState -> Sq -> SearchState)  -- Add successors for one square
@@ -150,9 +152,10 @@ takeOne state | S.EmptyL         <- S.viewl (searchQueue state) = (Nothing, stat
                  
 searchFrom :: PointIndex -> SearchState
 searchFrom p = SearchState 
-    {   visitedSquares = M.singleton  p 0
-    ,   searchQueue    = S.singleton (p, 0)
-    ,   unseenSquares  = False   
+    {   visitedSquares   = M.singleton  p 0
+    ,   searchQueue      = S.singleton (p, 0)
+    ,   unseenSquares    = False   
+    ,   neighbourSquares = []
     }
 
 
@@ -168,12 +171,17 @@ expandRegion :: Map -> Graph -> Region -> Graph
 expandRegion world graph region = graph 
     { regionMap  = writeSquares (regionId region) changedSquares (regionMap graph)
     , openRegions = IS.delete (regionId region) open'
+    , regions     = modify (\v -> write v (regionIndex region) region') (regions graph)
+    }
+    
     }
     where
        search = searchRegion (regionDistance graph) world (regionMap graph) region
        (changedSquares, changedRegions) = changes (regionMap graph) (visitedSquares search)        
        open' = foldr IS.insert (openRegions graph) (filter (/= invalidRegion) changedRegions)
-
+       
+    region' = region { regionNeighbors = foldlr insert M.empty (neighbourSquares search) }
+    insert (k, v) m = M.insertWith (++) k [v]    
     
 writeSquares :: RegionIndex -> [Sq] -> RegionMap ->  RegionMap
 writeSquares r squares regionMap = runST update where
@@ -197,19 +205,25 @@ searchRegion distance world regions region = search successors takeOne (searchFr
             state' = state 
                      { visitedSquares = foldr (uncurry M.insert) (visitedSquares state) next
                      , unseenSquares  = unseenSquares state || any isUnknown neighbors
-                     , searchQueue    = foldl' (S.|>) (searchQueue state) next
+                     , searchQueue    = foldl' (S.|>) (searchQueue state) next'
+                     , neighbourSquares =  borders' ++ (neighborSquares state)
                      }
             
             neighbors = neighborIndices (mapSize world) p 
-            incDistance p = (p, d + 1)
+            (next, borders) = (partition isBorder . filter isSuccessor)  neighbors
             	
-            next =  (map incDistance . filter isSuccessor)  neighbors
+            next' =  map (\p -> (p, d + 1)) next
+            borders' = map ((fst . getRegion) &&& id)  borders
+            
             isUnknown = not . wasSeen . (world `atIndex`)
-			          
+                      
             isSuccessor p = isLand (world `atIndex` p)                -- Land and not water (and we've seen it before)
                           && (M.notMember p (visitedSquares state))   -- Not already visited
-                          && ((regionId region) == r' || d < d')
+            
+            getRegion p = regions `U.unsafeIndex` p
+                          
+            isBorder p = (regionId region) /= r' && d < d'
                  where
-                     (r', d') = regions `U.unsafeIndex` p
+                     (r', d') = getRegion p
                      
                      
