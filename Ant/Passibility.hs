@@ -1,8 +1,16 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Ant.Map 
+module Ant.Passibility 
     ( Passibility
+    , newlyVisible
+    , updatePassibility
+    , emptyPassibility
+    , squareCost  
+    , indexCost
+    , maxCost  
     
+    , Pattern
+    , pattern2
     )
     
 where
@@ -10,51 +18,89 @@ where
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
+import Control.Monad
+import Control.Arrow
+import Control.Monad.ST
+
 import Ant.Map
 import Ant.Point
 import Ant.Square
 import Ant.IO
 
+type Pattern = U.Vector (Int, Int, Int)
 
-
-type Passibility = 
-    { squareCost  :: U.Vector Int
-    , costPattern :: U.Vector (Int, Int, Int)
+data Passibility = Passibility
+    { squareCosts  :: U.Vector Int
+    , costPattern :: Pattern
+    , passSize    :: !Size
+    , maxCost     :: !Int
     }
-
+    
+squareCost :: Passibility -> Point  -> Int
+squareCost pass p = (squareCosts pass) `U.unsafeIndex` i where 
+        i = (passSize pass) `wrapIndex` p
+{-# INLINE squareCost #-}
+        
+indexCost :: Passibility -> Int -> Int
+indexCost pass i = (squareCosts pass) `U.unsafeIndex` i       
+{-# INLINE indexCost #-}
+        
 newlyVisible :: U.Vector Bool -> Map -> U.Vector Int
-newlyVisible vis (Map squares size) =  U.map fst . U.filter snd . U.imap (newlyVisible &&& id) $ squares 
+newlyVisible vis world =  U.map snd . U.filter fst . U.imap newlyVisible $ vis 
     where
-        newlyVisible i True  = not . wasSeen (squares `U.unsafeIndex` index )
-        newlyVisible _ False = False
+        newlyVisible i True  = (not . wasSeen $ world `atIndex` i, i)
+        newlyVisible i False = (False, i)
 
         
 updatePassibility  :: U.Vector Int -> Map -> Passibility -> Passibility
-updatePassibility newSquares world (Passibility cost pattern) = runST update where
+updatePassibility newSquares world pass = pass { squareCosts = runST addSquares } where
     
-    addPattern :: UM.Vector Int -> Int -> ST s ()
-    addPattern v p = 
+    addPattern :: UM.MVector s Int -> Int -> ST s ()
+    addPattern v i = do
+        let (Point x y) = fromIndex (mapSize world) i
+        
+        U.forM_ (costPattern pass) $ \ (dx, dy, weight) -> do
+            let i' = wrapIndex (mapSize world) (Point (x + dx) (y + dy)) 
+    
+            c <- UM.unsafeRead v i'
+            UM.unsafeWrite v i' (c - weight) 
     
     addSquares :: ST s  (U.Vector Int)
     addSquares = do
-        v <- unsafeThaw cost
+        v <- U.unsafeThaw (squareCosts pass)
         
         U.forM_ newSquares $ \p -> do
             let sq = world `atIndex` p
         
-            if (isWater p)
-                then unsafeWrite v p 0
-                else addPattern v p
+            when (not (isWater sq)) $ addPattern v p
                 
+        U.unsafeFreeze v
         
-emptyPassiblity :: Size -> Int -> Passibility
-emptyPassibility size localSize = Passibility 
-    { squareCost = U.replicate (area size) 0
-    , costPattern = pattern localSize
+emptyPassibility :: Size -> Pattern -> Passibility
+emptyPassibility size pattern = Passibility 
+    { squareCosts = U.replicate (area size) (sumPattern pattern)
+    , costPattern = pattern
+    , passSize    = size
+    , maxCost     = sumPattern pattern
     }    
 
-pattern :: Int -> U.Vector (Int, Int, Int)
-pattern size = [(x, y, weight x y) | x <- [-size.. size], y <- [-size .. size]]
-    weight 0 0 = 0
-    weight x y = 1 + min (size - abs x) (size - abs y) 
 
+pattern2 :: Pattern
+pattern2 = U.fromList (zipWith (\(x, y) w -> (x, y, w)) coords weights) 
+    where 
+    
+    coords = [(x, y) | x <- [-2..2], y <- [-2..2]]
+    weights = [ 0, 1, 1, 1, 0
+              , 1, 2, 3, 2, 1
+              , 1, 3, 6, 3, 1
+              , 1, 2, 3, 2, 1
+              , 0, 1, 1, 1, 0 
+              ]
+    
+
+
+sumPattern :: U.Vector (Int, Int, Int) -> Int
+sumPattern = U.sum . U.map third where
+    third (_, _, x) = x
+    
+    

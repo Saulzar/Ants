@@ -12,28 +12,29 @@ import Ant.Game
 import Ant.Renderer
 
 import qualified Data.Map as M
+import qualified Data.Vector.Unboxed as U
 
 createMap :: Map
-createMap = fromFunction (Size 100 100) f where
-    f (Point x y) | x == 1 || x == 98 = waterSquare
-                  | y == 1 || y == 98 = waterSquare
-                  | otherwise = landSquare
+createMap = fromFunction (Size 40 40) f where
+    f (Point x y) | x > 4 && x < 36 && y > 4 && y < 36 = landSquare
+                  | otherwise = waterSquare
 
-   
+smallMap :: Map
+smallMap = fromFunction (Size 40 40) f where
+    f  = const landSquare   
 
 testState :: IO GameState
 testState = do
-    --scenario <- readScenario "maps/random_walk/random_walk_08p_01.map"
-    scenario <- readScenario "maps/maze/maze_08p_01.map"
-    --let scenario = createMap
+    --scenario <- readScenario "maps/random_walk/random_walk_02p_01.map"
+    --scenario <- readScenario "maps/maze/maze_02p_01.map"
+    let scenario = smallMap
     
-    let graph  = emptyGraph (mapSize scenario) 10
+    let graph  = emptyGraph (mapSize scenario) 100
     
     let (Size w h) = (mapSize scenario)
     
-    let points = [Point x y | x <- [0, 8 .. w], y <- [0, 8 .. h]]
-    let indices = map (toIndex (mapSize scenario)) points
-    let graph' = foldl' ((fst .) . addRegion scenario) graph indices
+    let points = [Point x y | x <- [5, 10 .. 15], y <- [5, 10 .. 15]]
+    let graph' = foldl' ((fst .) . addRegion scenario) graph points
     
     print points
     
@@ -43,19 +44,27 @@ testState = do
     
     
     --print (map (\(p, d) -> fromIndex (mapSize scenario) p)  (M.toList (regionSquares r) ))
-    
-    
+
+    let allSquares = U.fromList [0.. w * h - 1]         
+    let pass = updatePassibility allSquares scenario (emptyPassibility (Size w h) pattern2)
+        
+    print (maxCost pass)
+        
     print (mapSize scenario)
     
     --print (regionSquares r)
+           
+    let graphs = iterate (updateGraph pass scenario ) graph'
        
+    let graph4 = graphs !! 10
+    let graph5 = updateGraph pass scenario (setAllOpen graph4)    
     
-    let graphs = iterate (updateGraph scenario) graph'
         
     return GameState
         { gameSettings = defaultSettings
         , gameMap      = scenario
-        , gameGraph    = graphs !! 20
+        , gameGraph    = graph5
+        , gamePass     = pass
         }
         
         
@@ -114,19 +123,22 @@ renderInWindow win state = do
     let dh = (vh - h) `div` 2
     
     renderWithDrawable win $ withTransform $ do 
-        setAntialias AntialiasNone
+        --setAntialias AntialiasNone
         
         translate (fromIntegral dw * s) (fromIntegral dh * s)
         scale s s
 
         --renderMap (worldColour world) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
         renderMap (graphColours world graph) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))      
-        renderGraph graph 
+        renderGraph graph
         
-        setSourceRGB 0 0 0 
+       -- renderMap (passColours world (gamePass state)) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
+        
+        setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)
-        rectangle' 0 0 w h
+        rectangle (-0.5) (-0.5) (fromIntegral w) (fromIntegral h)
         stroke
+        
         
     where
         world = gameMap state

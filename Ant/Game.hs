@@ -10,6 +10,7 @@ module Ant.Game
      , module Ant.Map
      , module Ant.Scenario
      , module Ant.Graph
+     , module Ant.Passibility
      
      )
     where
@@ -25,7 +26,7 @@ import Ant.Map
 import Ant.Scenario
 import Ant.Square
 import Ant.Graph
-
+import Ant.Passibility
 
 import System.Random
 
@@ -36,6 +37,7 @@ data GameState = GameState
     { gameSettings      :: !GameSettings
     , gameMap           :: Map
     , gameGraph         :: Graph
+    , gamePass          :: Passibility
     }
 
 
@@ -45,6 +47,7 @@ initialState settings = GameState
     { gameSettings    = settings
     , gameMap         = emptyMap unknownSquare (mapDimensions settings) 
     , gameGraph       = emptyGraph (mapDimensions settings) 32
+    , gamePass = emptyPassibility (mapDimensions settings) pattern2
     }
  
  

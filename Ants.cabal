@@ -82,10 +82,11 @@ Executable Debugger
       split >= 0.1,
       cairo >= 0.12.2,
       gtk   >= 0.12.2,
-      colour >= 2.3
+      colour >= 2.3,
+      fingertree >= 0.0.1
       
       
-  ghc-options: -threaded -O1
+  ghc-options: -threaded -O1 -funbox-strict-fields
       
   
   -- Modules not exported by this package.

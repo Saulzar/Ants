@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, PatternGuards #-}
 
 module Ant.Map 
     ( Map
@@ -15,7 +15,7 @@ module Ant.Map
     , updateContent
     
     , fromIndex
-    , toIndex
+    --, toIndex
     
     , at
     , wrapIndex
@@ -30,6 +30,10 @@ module Ant.Map
     
     , manhatten
     , manhattenIndex
+    
+    , difference
+    , distanceSqIndex
+    , distanceSq
     )
     
 where
@@ -41,7 +45,7 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
 import Control.Monad.ST
-import Control.Arrow (&&&)
+import Control.Arrow 
 
 import Data.List
 import Data.List.Split
