@@ -40,7 +40,6 @@ data GameState = GameState
     , gamePass          :: Passibility
     }
 
-
  
 initialState :: GameSettings -> GameState
 initialState settings = GameState 

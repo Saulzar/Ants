@@ -9,7 +9,6 @@ import qualified Data.Vector as V
 
 import Ant.Game
 
-  
 import Data.Colour.SRGB
 import Data.Colour.Names
 import Data.Colour.RGBSpace
@@ -19,6 +18,8 @@ import Data.Colour
 import Data.Function
 import Data.List
 import Data.Maybe
+
+import qualified Data.Vector as V
 
 import Debug.Trace
 import qualified Data.IntMap as M
@@ -59,12 +60,16 @@ worldColour :: Map -> Point -> Colour Double
 worldColour world p = squareColour (world `at` p)
 {-# INLINE worldColour #-}
 
+colours :: V.Vector (Colour Double)
+colours = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, mintcream, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
 
 regionColour ::  Int -> Colour Double
-regionColour i = makeRGB (fromIntegral (i * 117 `mod` 360))  
+regionColour i = colours `V.unsafeIndex` (i `mod` V.length colours)
+
+{-makeRGB (fromIntegral (i * 117 `mod` 360))  
   where
       makeRGB hue = uncurryRGB sRGB (hsv hue 1 1)
-
+-}
       
 drawCircle :: Point -> Double -> Render ()
 drawCircle (Point x y) r = arc (fromIntegral x) (fromIntegral y) r 0 (pi * 2.0)        
@@ -86,6 +91,16 @@ wrapDiff (Size width height) (Point x1 y1) (Point x2 y2) = Size (wrap x1 x2 widt
     where
         wrap d1 d2 dim = minimumBy (compare `on` abs) [d2 - d1, d2 - d1 + dim, d2 - d1 - dim]
     
+moveTo' :: Point -> Render ()
+moveTo' (Point x y) = moveTo (fromIntegral x) (fromIntegral y)
+            
+
+drawTextAt :: Point -> String -> Render ()
+drawTextAt (Point x y) str = do
+    ext <- textExtents str
+    
+    moveTo (fromIntegral x - textExtentsWidth ext * 0.5) (fromIntegral y + textExtentsHeight ext * 0.5)
+    showText str
             
 renderGraph :: Graph -> Render()
 renderGraph graph = do      
@@ -93,12 +108,7 @@ renderGraph graph = do
     setLineWidth 0.3
     
     setSourceRGBA 1 1 0 0.4    
-    forM_ (M.toList (regions graph)) $ \(i, r) -> do 
-        drawCircle (regionCentre r) 0.6 
-        fill
-          
-        traceShow (regionNeighbors r) $ return ()
-  
+    forM_ (M.toList (regions graph)) $ \(i, r) -> do  
         forM_ (M.toList (regionNeighbors r)) $ \(j, n) -> do
             
             let r' = fromJust (j `M.lookup` (regions graph))
@@ -106,10 +116,22 @@ renderGraph graph = do
           
             drawLine' (regionCentre r) d
             stroke
-                               
-      
+            
+    setFontSize 1.0
+   
+    
+    forM_ (M.toList (regions graph)) $ \(i, r) -> do 
+        setSourceRGB 0 0 0
+        drawCircle (regionCentre r) 0.6 
+        fill 
+
+        setSourceRGB 1 1 0        
+        drawTextAt (regionCentre r) (show (regionId r))
+        
+
+    
 mapColours :: Map -> Colour Double -> Point -> Colour Double
-mapColours world c p   | isWater square         = lightblue
+mapColours world c p   | isWater square         = white
                        | otherwise              = c  
      where                   
         square = world `at` p
@@ -123,7 +145,7 @@ graphColours world graph p = mapColours world colour p
         (region, distance) = graph `graphSquare` p 
         
         scale = fromIntegral distance / fromIntegral (regionDistance graph)
-        colour | region >= 0 = blend scale (regionColour region) black
+        colour | region >= 0 = (regionColour region)
                | otherwise   = red
 {-# INLINE graphColours #-}
 

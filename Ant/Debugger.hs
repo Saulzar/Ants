@@ -11,7 +11,10 @@ import Data.List
 import Ant.Game
 import Ant.Renderer
 
-import qualified Data.Map as M
+import System.CPUTime
+import Text.Printf
+
+import qualified Data.IntMap as M
 import qualified Data.Vector.Unboxed as U
 
 createMap :: Map
@@ -26,18 +29,18 @@ smallMap = fromFunction (Size 40 40) f where
 testState :: IO GameState
 testState = do
     --scenario <- readScenario "maps/random_walk/random_walk_02p_01.map"
-    --scenario <- readScenario "maps/maze/maze_02p_01.map"
-    let scenario = smallMap
+    scenario1 <- readScenario "maps/maze/maze_08p_01.map"
+    --let scenario = smallMap
+    
+    let scenario = tileMap scenario1 (Size 300 300)
     
     let graph  = emptyGraph (mapSize scenario) 100
     
     let (Size w h) = (mapSize scenario)
     
-    let points = [Point x y | x <- [5, 10 .. 15], y <- [5, 10 .. 15]]
+    let points = [Point x y | x <- [10, 20 .. 300], y <- [10, 20 .. 300]]
     let graph' = foldl' ((fst .) . addRegion scenario) graph points
-    
-    print points
-    
+  
     
 --    let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
 --    let (graph'', r) = addRegion scenario graph' (toIndex (mapSize scenario) (Point 66 41))
@@ -55,21 +58,35 @@ testState = do
     --print (regionSquares r)
            
     let graphs = iterate (updateGraph pass scenario ) graph'
-       
-    let graph4 = graphs !! 10
-    let graph5 = updateGraph pass scenario (setAllOpen graph4)    
-    
+    let final = graphs !! 10
+      
+    print (M.size (regions final))
+    print $ neighborsValid final
         
     return GameState
         { gameSettings = defaultSettings
         , gameMap      = scenario
-        , gameGraph    = graph5
+        , gameGraph    = final 
         , gamePass     = pass
         }
-        
-        
-        
 
+time :: IO t -> IO t
+time a = do
+    start <- getCPUTime
+    v <- a
+    end   <- getCPUTime
+    let diff = (fromIntegral (end - start)) / (10^12)
+    printf "Computation time: %0.3f sec\n" (diff :: Double)
+    return v        
+        
+main :: IO () 
+main = do
+    print "Starting..."   
+    time $ testState        
+
+    print "Done."
+        
+{-
 main :: IO ()
 main = do
      initGUI
@@ -90,7 +107,7 @@ main = do
          
      onDestroy window mainQuit
      mainGUI
-
+-}
 updateCanvas :: MVar GameState -> EventM EExpose Bool
 updateCanvas stateVar = do
   win <- eventWindow
@@ -131,6 +148,21 @@ renderInWindow win state = do
         --renderMap (worldColour world) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
         renderMap (graphColours world graph) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))      
         renderGraph graph
+        
+        
+        let (Just r) = M.lookup 8 (regions graph)
+    
+        let visited = searchRegion (gamePass state) world (regionMap graph) r   
+        let neighbors = neighborSquares (mapSize world) visited
+        let (sqs, rs) = findChanges (regionMap graph) visited 
+        
+        setSourceRGBA 0 0 0.4 1 
+                
+        forM_ (M.toList visited) $ \(i, d) ->  do
+            let p = fromIndex (mapSize world) i
+            drawCircle p 0.2
+            fill
+       
         
        -- renderMap (passColours world (gamePass state)) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
         

@@ -34,6 +34,8 @@ module Ant.Map
     , difference
     , distanceSqIndex
     , distanceSq
+    
+    , tileMap
     )
     
 where
@@ -66,6 +68,8 @@ instance Show Map where
             lines   = splitEvery width . map squareChar . S.toList $ squares  
 
 
+tileMap :: Map -> Size -> Map
+tileMap world = flip fromFunction (world `at`)
 
             
 fromSquares :: Size -> [Square] -> Map

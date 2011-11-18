@@ -86,7 +86,7 @@ Executable Debugger
       fingertree >= 0.0.1
       
       
-  ghc-options: -threaded -O1 -funbox-strict-fields
+  ghc-options: -threaded -O1 -funbox-strict-fields 
       
   
   -- Modules not exported by this package.
