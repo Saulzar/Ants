@@ -6,11 +6,14 @@ module Ant.Graph
     , regionMap
     , graphSize
     
+    , numRegions
+    , regionAt
     
     , Region (..)
 
     , RegionIndex
     , Distance
+    , invalidRegion
         
     , emptyGraph
     , addRegion
@@ -78,6 +81,7 @@ data Graph = Graph
     , openRegions    :: !RegionSet
     , graphSize         :: !Size
     , regionDistance    :: !Int
+    , candidates        :: !PointSet
     }
     
     
@@ -101,35 +105,53 @@ emptyGraph size distance = Graph
     , openRegions = S.empty
     , graphSize = size
     , regionDistance = distance
+    , candidates = S.empty
     }
      
 
+regionAt :: Graph -> Point -> RegionIndex
+regionAt graph p = fst $ regionMap graph `indexSq` index where
+   index = graphSize graph `wrapIndex` p 
+{-# INLINE regionAt #-}      
+     
+numRegions :: Graph -> Int
+numRegions graph = M.size (regions graph)     
+     
 updateRegion :: Passibility -> Map -> RegionIndex -> Graph -> Graph
 updateRegion pass world i graph = (expandRegion pass world graph region) 
     where (Just region) = M.lookup i (regions graph) 
 
 setAllOpen :: Graph -> Graph 
 setAllOpen graph = graph { openRegions = S.fromList [0.. M.size (regions graph)] }
-           
+       
 updateGraph :: Passibility -> Map -> Graph -> Graph
-updateGraph pass world graph =  foldr (flip (expandRegion pass world)) graph open
+updateGraph pass world graph =  (divideGraph pass . expandGraph pass world) graph 
+
+
+expandGraph :: Passibility -> Map -> Graph -> Graph
+expandGraph pass world graph =  foldr (flip (expandRegion pass world)) graph open
     where
         open = catMaybes . map (flip M.lookup (regions graph)) $ rs
         rs = S.toList (openRegions graph)
      
-addRegion ::  Map -> Graph -> Point -> (Graph, Region)
-addRegion world graph centre =  (graph', region)
-    where 
-        graph' = graph 
+     
+     
+     
+divideGraph :: Passibility -> Graph -> Graph
+divideGraph pass graph = graph -- TODO
+     
+     
+addRegion :: Point -> Graph -> Graph
+addRegion centre graph = graph 
             { regions = M.insert (regionId region) region (regions graph)
             , openRegions = S.insert (regionId region) (openRegions graph) 
             }
-    
-        region  = Region 
-            { regionId      = M.size (regions graph)
-            , regionCentre  = centre
-            , regionNeighbors = M.empty
-            }
+        where
+            region  = Region 
+                { regionId      = numRegions graph
+                , regionCentre  = centre
+                , regionNeighbors = M.empty
+                }
              
 
 separate :: (a -> a -> Int) -> Int -> [a] -> [a]        
@@ -206,17 +228,19 @@ neighborsValid graph = all (uncurry (hasNeighbor graph)) pairs
 
         
 expandRegion :: Passibility -> Map -> Graph -> Region -> Graph
-expandRegion pass world graph region = graph 
-    { regionMap    = writeSquares (regionId region) changedSquares (regionMap graph)
+expandRegion pass world graph region = open' `seq` graph 
+    { regionMap    = regionMap'
     , openRegions  = open'
-    , regions = M.map updateNeighbor' regions' 
-    --, regions = updateNeighbors (regionId region) changedNeighbors regionNeighbors' regions'
+    --, regions = M.map updateNeighbor' regions' 
+    , regions = updateNeighbors (regionId region) changedNeighbors regionNeighbors' regions'
+    , 
     }
     
     where
+        regionMap' = writeSquares (regionId region) changedSquares (regionMap graph)
     
         visited = searchRegion pass world (regionMap graph) region
-        (changedSquares, changedRegions) = findChanges (regionMap graph) visited      
+        (changedSquares, changedRegions) =  findChanges (regionMap graph) visited      
 
         neighbors = neighborSquares (mapSize world) visited
         regionNeighbors' = M.delete invalidRegion (neighborRegions (regionMap graph) neighbors) 
@@ -233,9 +257,10 @@ expandRegion pass world graph region = graph
         region' = region { regionNeighbors = regionNeighbors' }
         regions' = M.insert (regionId region) region' (regions graph)
 
-        updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
-        -- changedNeighbors = map fst $ M.toList (M.union (regionNeighbors region) regionNeighbors') 
-{-
+        --updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
+        changedNeighbors = map fst $ M.toList (M.union (regionNeighbors region) regionNeighbors') 
+
+{-        
 writeSquares :: RegionIndex -> [Sq] -> RegionMap ->  RegionMap
 writeSquares r squares regionMap = U.modify update regionMap 
     where update v = forM_ squares $ \(p, d) -> UM.unsafeWrite v p (r, d)
@@ -249,7 +274,6 @@ writeSquares r squares regionMap = runST update where
         v <- U.unsafeThaw regionMap
         forM_ squares $ \(p, d) -> UM.unsafeWrite v p (r, d)
         U.unsafeFreeze v
-
     
     
 data SearchState = SearchState
@@ -257,18 +281,14 @@ data SearchState = SearchState
     , searchQueue    :: !Queue
     }        
 
-    
-maxDistance :: Passibility -> Int
--- maxDistance pass = (maxCost pass) * 32
-maxDistance = const 20
-
 
 search :: (SearchState -> Sq -> SearchState)  -- Add successors for one square
-        -> SearchState -> SearchState
-search genSuccessors state = search' (takeOne state)   
-    where        
-        search' (Nothing, state)  =   state
-        search' (Just sq, state)  =   search' (takeOne (genSuccessors state sq))
+        -> Int -> SearchState -> SearchState
+search genSuccessors n state = search' n (takeOne state)   
+    where    
+        search' 0 (_,       state)  =   state
+        search' _ (Nothing, state)  =   state
+        search' n (Just sq, state)  =   search' (n - 1) (takeOne (genSuccessors state sq))
 
         
 takeOne :: SearchState -> (Maybe Sq, SearchState)
@@ -283,27 +303,26 @@ searchFrom p = SearchState
     ,   searchQueue      = Q.singleton 0 p
     }
             
-                                               
+maxDistance ::  Int
+maxDistance = 8
+                                              
 searchRegion :: Passibility -> Map -> RegionMap -> Region -> Set
-searchRegion pass world regions region = visitedSquares $ search successors (searchFrom centre) where
+searchRegion pass world regions region = visitedSquares $ search successors maxSquares (searchFrom centre) where
     centre = (mapSize world) `wrapIndex`  (regionCentre region)
+    maxSquares = (maxDistance * maxDistance)
 
     successors :: SearchState -> Sq -> SearchState               
-    successors  state (p, d) | d < (maxDistance pass) = state'
-                             | otherwise              = state
-    
-        where
-            
-            state' = state 
+    successors  state (p, d) = state 
                      { visitedSquares = foldr (uncurry M.insert) (visitedSquares state) next
                      , searchQueue    = foldr (\(p, d) -> Q.insert d p) (searchQueue state) next
-                     }
-            
+                     }       
+        where
+
             neighbors = neighborIndices (mapSize world) p 
             next = (filter isSuccessor . map withDistance)  neighbors
-            withDistance p' = (p', d + 1)         
+            withDistance p' = (p', d + getCost p')         
 
-            getCost p'= pass `indexCost` p'
+            getCost p'= 2 + pass `indexCost` p'
 
                                   
             isSuccessor (p', d') = isLand (world `atIndex` p')                -- Land and not water (and we've seen it before)

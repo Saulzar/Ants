@@ -29,6 +29,7 @@ import Ant.Graph
 import Ant.Passibility
 
 import System.Random
+import Debug.Trace
 
 type Game a = StateT GameState IO a
 
@@ -50,18 +51,79 @@ initialState settings = GameState
     }
  
  
+getSetting :: (GameSettings -> a) -> Game a
+getSetting f = gets (f . gameSettings) 
             
 playerAnt :: Int -> Content -> Bool
 playerAnt p (Ant p')  = p == p' 
 playerAnt _ _           = False
           
+playerHill :: Int -> Content -> Bool
+playerHill p (Hill p')  = p == p' 
+playerHill _ _           = False    
+
+contentSquares :: (Content -> Bool) -> [SquareContent] -> [Point]
+contentSquares f content = map fst $ filter (f . snd) content    
+          
+initRegions :: [SquareContent] -> Graph -> Graph
+initRegions content graph = foldr addRegion graph hillRegions where 
+    hills = contentSquares (playerHill 0) content
+    hillRegions = filter isUnknown hills   
+    isUnknown p = invalidRegion == graph `regionAt` p
+    
+    
+modifyGraph :: (Graph -> Graph) -> Game ()
+modifyGraph f = modify $ \state -> state { gameGraph = f (gameGraph state) }
+ 
+modifyMap :: (Map -> Map) -> Game ()
+modifyMap f = modify $ \state -> state { gameMap = f (gameMap state) }
+
+modifyPass :: (Passibility -> Passibility) -> Game ()
+modifyPass f = modify $ \state -> state { gamePass = f (gamePass state) }
+
+updateState :: [SquareContent] -> Game ()
+updateState content = do
+        
+    let ants = contentSquares (playerAnt 0) content
+    
+    world <- gets gameMap
+    radiusSq <- getSetting viewRadius2
+
+    let vis = visibleSet (mapSize world) radiusSq ants
+    let dVis = newlyVisible vis world
+
+    n <- gets (numRegions . gameGraph)
+    when (n == 0) $ modifyGraph (initRegions content) 
+    
+    traceShow n $ return ()
+    
+    let world' = (updateContent content . updateVisibility vis) world
+
+    pass <- gets gamePass 
+    let pass' = updatePassibility dVis world' pass
+
+    graph <- gets gameGraph
+    let graph' = updateGraph pass' world' graph
+    
+    
+    --let graph' = updateGraph 
+
+    modify $ \gameState -> gameState 
+        { gameMap = world'
+        , gamePass = pass'
+        , gameGraph = graph'
+        }
+
+    
 processTurn :: Int -> [SquareContent] -> Game [Order]
 processTurn n content = do
+    liftIO $ putStrLn $ "Processing turn: " ++ (show n) ++ "...\n"
     
-    let ants = filter (playerAnt 0 . snd) content
+    updateState content
+    return []
     
-    orders <- liftM (map toEnum . randomRs (0, 3)) (liftIO getStdGen)
-    return $ zip (map fst ants) orders
+    --orders <- liftM (map toEnum . randomRs (0, 3)) (liftIO getStdGen)
+    --return $ zip (map fst ants) orders
 
 
 runGame :: GameState -> IO GameState

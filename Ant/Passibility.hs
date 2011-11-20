@@ -53,7 +53,7 @@ newlyVisible vis world =  U.map snd . U.filter fst . U.imap newlyVisible $ vis
 
         
 updatePassibility  :: U.Vector Int -> Map -> Passibility -> Passibility
-updatePassibility newSquares world pass = pass { squareCosts = runST addSquares } where
+updatePassibility newSquares world pass = pass { squareCosts = U.modify addSquares (squareCosts pass) } where
     
     addPattern :: UM.MVector s Int -> Int -> ST s ()
     addPattern v i = do
@@ -65,16 +65,15 @@ updatePassibility newSquares world pass = pass { squareCosts = runST addSquares 
             c <- UM.unsafeRead v i'
             UM.unsafeWrite v i' (c - weight) 
     
-    addSquares :: ST s  (U.Vector Int)
-    addSquares = do
-        v <- U.unsafeThaw (squareCosts pass)
+    -- addSquares :: ST s  (U.Vector Int)
+    addSquares v = do
+       -- v <- U.unsafeThaw (squareCosts pass)
         
         U.forM_ newSquares $ \p -> do
             let sq = world `atIndex` p
-        
             when (not (isWater sq)) $ addPattern v p
                 
-        U.unsafeFreeze v
+      --  U.unsafeFreeze v
         
 emptyPassibility :: Size -> Pattern -> Passibility
 emptyPassibility size pattern = Passibility 

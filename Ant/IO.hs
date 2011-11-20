@@ -43,7 +43,7 @@ data GameSettings = GameSettings
      , attackRadius2 :: !Int
      , spawnRadius2  :: !Int
      , playerSeed    :: !Int
-     }
+     } deriving Show
      
 
 defaultSettings :: GameSettings
@@ -79,7 +79,7 @@ expectLine :: String -> IO ()
 expectLine  str = do
     line <- getLine 
     if (line /= str)
-       then hPutStrLn stderr ("Expected: " ++ str ++ " got: " ++ str)
+       then hPutStrLn stderr ("Expected: " ++ str ++ " got: " ++ line)
        else return ()
 
                 
@@ -88,7 +88,6 @@ readSettings = do
     n <- liftM readTurn getLine
     settings <- readLines stdin readSetting
     
-    expectLine "ready"
     return (makeSettings settings)
     
 
@@ -101,18 +100,22 @@ readContent :: String -> Maybe SquareContent
 readContent str | (c : args) <- (words str) = (mapM maybeRead args) >>= content' c
                 | otherwise                 = Nothing
     where 
-       content' "a" [x, y, p] = at x y (Ant p)    
-       content' "h" [x, y, p] = at x y (Hill p)
-       content' "w" [x, y]    = at x y Water
-       content' "f" [x, y]    = at x y Food
-       content' "d" [x, y, p] = at x y (DeadAnt p)
+       content' "a" [r, c, p] = at r c (Ant p)    
+       content' "h" [r, c, p] = at r c (Hill p)
+       content' "w" [r, c]    = at r c Water
+       content' "f" [r, c]    = at r c Food
+       content' "d" [r, c, p] = at r c (DeadAnt p)
             
        content' _   _         = Nothing
        
-       at x y c = Just (Point x y, c)
+       at r c o = Just (Point c r, o)
 
 
-
+maybeLine :: IO (Maybe String)
+maybeLine = do
+    end <- hIsEOF stdin
+    if end then return Nothing
+           else liftM Just getLine
                
 
 beginTurn :: IO ()
@@ -125,13 +128,13 @@ gameLoop :: (MonadIO m) => (Int -> [SquareContent] -> m [Order]) ->  m ()
 gameLoop turn = do
     
     liftIO beginTurn
-    n <- liftIO $ liftM readTurn getLine
+
+    line <- liftIO maybeLine 
+    let n = line >>= readTurn
     
     when (isJust n) $ do
         
         content <- liftIO $ readLines stdin readContent
-        liftIO $ expectLine "go"
-            
         orders <- turn (fromJust n) content
         
         liftIO $ mapM_ (putStrLn . orderString)  orders

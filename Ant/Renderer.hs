@@ -54,17 +54,73 @@ renderMap f (Point sx sy) (Point ex ey) = do
        fill
    
    setAntialias AntialiasDefault
+
+drawHill :: Player -> Point -> Render ()
+drawHill player p = do
+    setColour black
+    drawCircle p 0.8 >> fillPreserve 
+    
+    setLineWidth 0.1
+    setColour (antColour player) >> stroke
+    drawTextAt p "H"
+
+    
+drawAnt :: Player -> Point -> Render ()
+drawAnt player p = do
+    setColour (antColour player)
+    drawCircle p 0.5
+    fill
+    
+drawFood :: Point -> Render ()
+drawFood p = do
+    setFontSize 2.0
+    setColour magenta
+    drawTextAt p "F"
    
 
+whenMaybe :: (Monad m) => Maybe a -> (a -> m ()) -> m ()
+whenMaybe (Just v) f  = f v
+whenMaybe (Nothing) _ = return () 
+ 
+renderContent :: Map -> Point -> Point -> Render ()
+renderContent world (Point sx sy) (Point ex ey) = do
+   setFontSize 1.0
+
+   forM_ [sx.. ex] $ \x -> do
+     forM_ [sy.. ey] $ \y -> do
+       let p = (Point x y)
+       renderSquare (world `at` p) p
+   
+ 
+renderSquare :: Square -> Point  -> Render ()
+renderSquare sq p = do
+    
+    whenMaybe (squareHill sq) $ \player ->
+        drawHill player p
+        
+    whenMaybe (squareAnt sq) $ \player ->
+        drawAnt player p
+    
+    when (hasFood sq) $ drawFood p
+
+    
 worldColour :: Map -> Point -> Colour Double
 worldColour world p = squareColour (world `at` p)
 {-# INLINE worldColour #-}
 
-colours :: V.Vector (Colour Double)
-colours = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, mintcream, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
+regionColours :: V.Vector (Colour Double)
+regionColours = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, brown, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
 
 regionColour ::  Int -> Colour Double
-regionColour i = colours `V.unsafeIndex` (i `mod` V.length colours)
+regionColour i = regionColours `V.unsafeIndex` (i `mod` V.length regionColours)
+
+antColours :: V.Vector (Colour Double)
+antColours = V.fromList [white, lightgreen, orange, darkturquoise, red, blue, lightsalmon, mediumpurple]
+
+
+antColour ::  Int -> Colour Double
+antColour i = antColours `V.unsafeIndex` (i `mod` V.length antColours)
+
 
 {-makeRGB (fromIntegral (i * 117 `mod` 360))  
   where
@@ -99,7 +155,7 @@ drawTextAt :: Point -> String -> Render ()
 drawTextAt (Point x y) str = do
     ext <- textExtents str
     
-    moveTo (fromIntegral x - textExtentsWidth ext * 0.5) (fromIntegral y + textExtentsHeight ext * 0.5)
+    moveTo (fromIntegral x + 0.4 - textExtentsWidth ext * 0.5) (fromIntegral y  + textExtentsHeight ext * 0.5)
     showText str
             
 renderGraph :: Graph -> Render()
@@ -131,7 +187,7 @@ renderGraph graph = do
 
     
 mapColours :: Map -> Colour Double -> Point -> Colour Double
-mapColours world c p   | isWater square         = white
+mapColours world c p   | isWater square         = black
                        | otherwise              = c  
      where                   
         square = world `at` p
@@ -157,7 +213,7 @@ passColours world pass p =  mapColours world colour p
         cost = pass `squareCost` p 
         
         scale = fromIntegral cost / fromIntegral (maxCost pass)
-        colour = blend scale green white
+        colour = blend scale white darkgreen
     
 {-# INLINE passColours #-}
 

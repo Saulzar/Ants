@@ -24,7 +24,7 @@ readLines handle reader = readLines' []
     where 
         readLines' xs = checkEOF handle xs $ do
             line <- hGetLine handle
-            
+                        
             case reader line of 
                  Nothing -> return xs 
                  Just x  -> readLines' (x : xs)

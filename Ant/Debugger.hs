@@ -29,17 +29,17 @@ smallMap = fromFunction (Size 40 40) f where
 testState :: IO GameState
 testState = do
     --scenario <- readScenario "maps/random_walk/random_walk_02p_01.map"
-    scenario1 <- readScenario "maps/maze/maze_08p_01.map"
+    scenario <- readScenario "maps/maze/maze_08p_01.map"
     --let scenario = smallMap
     
-    let scenario = tileMap scenario1 (Size 300 300)
+    --let scenario = tileMap scenario1 (Size 300 300)
     
     let graph  = emptyGraph (mapSize scenario) 100
     
     let (Size w h) = (mapSize scenario)
     
-    let points = [Point x y | x <- [10, 20 .. 300], y <- [10, 20 .. 300]]
-    let graph' = foldl' ((fst .) . addRegion scenario) graph points
+    let points = [Point x y | x <- [5, 10 .. w - 1], y <- [5, 10 .. h - 1]]
+    let graph' = foldr addRegion graph points
   
     
 --    let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
@@ -78,36 +78,41 @@ time a = do
     let diff = (fromIntegral (end - start)) / (10^12)
     printf "Computation time: %0.3f sec\n" (diff :: Double)
     return v        
-        
+        {-
 main :: IO () 
 main = do
     print "Starting..."   
     time $ testState        
 
     print "Done."
-        
-{-
+        -}
+
 main :: IO ()
 main = do
-     initGUI
-     window <- windowNew
-     set window [windowTitle := "Hello Cairo",
-                 windowDefaultWidth := 800, windowDefaultHeight := 600,
-                 containerBorderWidth := 10 ]
+    settings <- readSettings
+    print settings
+    
+    state <- runGame (initialState settings) 
 
-     frame <- frameNew
-     containerAdd window frame
-     canvas <- drawingAreaNew
-     containerAdd frame canvas
-     widgetModifyBg canvas StateNormal (Color 65535 65535 65535)     
-     widgetShowAll window 
+    initGUI
+    window <- windowNew
+    set window [windowTitle := "Hello Cairo",
+             windowDefaultWidth := 800, windowDefaultHeight := 600,
+             containerBorderWidth := 10 ]
+
+    frame <- frameNew
+    containerAdd window frame
+    canvas <- drawingAreaNew
+    containerAdd frame canvas
+    widgetModifyBg canvas StateNormal (Color 65535 65535 65535)     
+    widgetShowAll window 
+    
+    stateVar <- newMVar state
+    canvas `on` exposeEvent $ updateCanvas stateVar
      
-     stateVar <- testState >>= newMVar
-     canvas `on` exposeEvent $ updateCanvas stateVar
-         
-     onDestroy window mainQuit
-     mainGUI
--}
+    onDestroy window mainQuit
+    mainGUI
+
 updateCanvas :: MVar GameState -> EventM EExpose Bool
 updateCanvas stateVar = do
   win <- eventWindow
@@ -145,12 +150,14 @@ renderInWindow win state = do
         translate (fromIntegral dw * s) (fromIntegral dh * s)
         scale s s
 
-        --renderMap (worldColour world) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
-        renderMap (graphColours world graph) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))      
+        let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
+        
+        --renderMap (worldColour world) start end
+        renderMap (graphColours world graph) start end    
         renderGraph graph
         
         
-        let (Just r) = M.lookup 8 (regions graph)
+        {-let (Just r) = M.lookup 8 (regions graph)
     
         let visited = searchRegion (gamePass state) world (regionMap graph) r   
         let neighbors = neighborSquares (mapSize world) visited
@@ -162,9 +169,10 @@ renderInWindow win state = do
             let p = fromIndex (mapSize world) i
             drawCircle p 0.2
             fill
-       
+        -}
         
-       -- renderMap (passColours world (gamePass state)) (Point (-dw) (-dh)) (Point (w + dw) (h + dh))
+        --renderMap (passColours world (gamePass state)) start end
+        --renderContent world start end 
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)
