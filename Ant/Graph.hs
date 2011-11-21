@@ -49,6 +49,7 @@ import Control.Monad.ST
 
 import Data.List
 import Data.Maybe
+import Data.Function
 
 import Control.Monad
 import Control.Arrow
@@ -73,7 +74,7 @@ type Queue = Q.PQueue Distance PointIndex
 
 type RegionSet = S.IntSet
 type PointSet = S.IntSet
-type RegionCount = M.IntMap Int
+type EdgeMap = M.IntMap Int
 
 data Graph = Graph
     { regionMap  :: !RegionMap
@@ -88,7 +89,8 @@ data Graph = Graph
 data Region = Region 
      {  regionCentre  :: !Point
      ,  regionId      :: !RegionIndex
-     ,  regionNeighbors :: !RegionCount
+     ,  regionNeighbors :: !EdgeMap
+     ,  regionSize      :: !Int
      } deriving Show
 
      
@@ -125,7 +127,7 @@ setAllOpen :: Graph -> Graph
 setAllOpen graph = graph { openRegions = S.fromList [0.. M.size (regions graph)] }
        
 updateGraph :: Passibility -> Map -> Graph -> Graph
-updateGraph pass world graph =  (divideGraph pass . expandGraph pass world) graph 
+updateGraph pass world graph =  (seedRegions pass . expandGraph pass world) graph 
 
 
 expandGraph :: Passibility -> Map -> Graph -> Graph
@@ -135,12 +137,25 @@ expandGraph pass world graph =  foldr (flip (expandRegion pass world)) graph ope
         rs = S.toList (openRegions graph)
      
      
+seedRegions :: Passibility -> Graph -> Graph
+seedRegions pass graph = graph' { candidates = S.empty }
+    where 
+        seeds = findSeeds pass graph
+        graph' = foldr addRegion graph (map (fromIndex (graphSize graph)) seeds)
      
+seedDistance :: Int
+seedDistance = 8
      
-divideGraph :: Passibility -> Graph -> Graph
-divideGraph pass graph = graph -- TODO
-     
-     
+findSeeds :: Passibility -> Graph -> [PointIndex]
+findSeeds pass graph = separate (manhattenIndex (graphSize graph)) maxDistance prioritised
+    where
+        candidates' = (filter validSeed . S.toList) (candidates graph)
+        prioritised = sortBy (compare `on` (indexCost pass)) candidates'
+        distance = snd . (regionMap graph `indexSq`)
+        
+        validSeed p = distance p > seedDistance && pass `indexCost` p < 8
+        
+        
 addRegion :: Point -> Graph -> Graph
 addRegion centre graph = graph 
             { regions = M.insert (regionId region) region (regions graph)
@@ -232,8 +247,8 @@ expandRegion pass world graph region = open' `seq` graph
     { regionMap    = regionMap'
     , openRegions  = open'
     --, regions = M.map updateNeighbor' regions' 
-    , regions = updateNeighbors (regionId region) changedNeighbors regionNeighbors' regions'
-    , 
+    , regions      = updateNeighbors (regionId region) changedNeighbors regionNeighbors' regions'
+    , candidates   = foldr S.insert  (candidates graph) (map fst changedSquares)
     }
     
     where
@@ -252,9 +267,7 @@ expandRegion pass world graph region = open' `seq` graph
               | otherwise = S.delete (regionId region) set
            where set = foldr S.insert (openRegions graph) (filter (/= invalidRegion) changedRegions)
 
-
-
-        region' = region { regionNeighbors = regionNeighbors' }
+        region' = region { regionNeighbors = regionNeighbors', regionSize = M.size visited }
         regions' = M.insert (regionId region) region' (regions graph)
 
         --updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
@@ -304,7 +317,7 @@ searchFrom p = SearchState
     }
             
 maxDistance ::  Int
-maxDistance = 8
+maxDistance = 12
                                               
 searchRegion :: Passibility -> Map -> RegionMap -> Region -> Set
 searchRegion pass world regions region = visitedSquares $ search successors maxSquares (searchFrom centre) where
@@ -322,7 +335,7 @@ searchRegion pass world regions region = visitedSquares $ search successors maxS
             next = (filter isSuccessor . map withDistance)  neighbors
             withDistance p' = (p', d + getCost p')         
 
-            getCost p'= 2 + pass `indexCost` p'
+            getCost p'= 1 + pass `indexCost` p' `div` 8
 
                                   
             isSuccessor (p', d') = isLand (world `atIndex` p')                -- Land and not water (and we've seen it before)
