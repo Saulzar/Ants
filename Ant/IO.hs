@@ -10,6 +10,14 @@ module Ant.IO
     , readSettings
     , gameLoop
     , defaultSettings
+	
+	, playerAnt     
+	, playerHill 
+	, getSetting  
+	
+	, isAnt
+	, isHill
+	, isFood
     )
     
 where
@@ -64,8 +72,31 @@ makeSettings settings = GameSettings
     where
        find     = (`lookup` settings)
        setting d = (fromMaybe d) . find               
-             
-             
+ 
+getSetting :: (GameSettings -> a) -> Game a
+getSetting f = gets (f . gameSettings) 
+            
+playerAnt :: Int -> Content -> Bool
+playerAnt p (Ant p')  = p == p' 
+playerAnt _ _           = False
+          
+playerHill :: Int -> Content -> Bool
+playerHill p (Hill p')  = p == p' 
+playerHill _ _           = False                 
+			 
+isAnt :: Content -> Bool
+isAnt (Ant _) = True
+isAnt _ 	  = False
+
+isHill :: Content -> Bool
+isHill (Hill _)  = True 
+isHill _         = False  
+
+isFood :: Content -> Bool
+isFood Food  = True 
+isFood _     = False  
+
+			 
 orderString :: Order -> String
 orderString (Point x y, dir) = "o " ++ (show x) ++ " " ++ (show y) ++ " " ++ (dirString dir)
     where

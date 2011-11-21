@@ -51,16 +51,7 @@ initialState settings = GameState
     }
  
  
-getSetting :: (GameSettings -> a) -> Game a
-getSetting f = gets (f . gameSettings) 
-            
-playerAnt :: Int -> Content -> Bool
-playerAnt p (Ant p')  = p == p' 
-playerAnt _ _           = False
-          
-playerHill :: Int -> Content -> Bool
-playerHill p (Hill p')  = p == p' 
-playerHill _ _           = False    
+
 
 contentSquares :: (Content -> Bool) -> [SquareContent] -> [Point]
 contentSquares f content = map fst $ filter (f . snd) content    
