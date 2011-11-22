@@ -2,6 +2,10 @@
 
 module Ant.Graph
     ( Graph
+    , RegionMap
+    , Region (..)
+    , RegionIndex
+    
     , regions
     , regionMap
     , graphSize
@@ -9,9 +13,6 @@ module Ant.Graph
     , numRegions
     , regionAt
     
-    , Region (..)
-
-    , RegionIndex
     , Distance
     , invalidRegion
         
@@ -166,6 +167,7 @@ addRegion centre graph = graph
                 { regionId      = numRegions graph
                 , regionCentre  = centre
                 , regionNeighbors = M.empty
+                , regionSize      = 0
                 }
              
 

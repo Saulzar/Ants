@@ -51,7 +51,8 @@ initialState settings = GameState
     }
  
  
-
+getSetting :: (GameSettings -> a) -> Game a
+getSetting f = gets (f . gameSettings) 
 
 contentSquares :: (Content -> Bool) -> [SquareContent] -> [Point]
 contentSquares f content = map fst $ filter (f . snd) content    
