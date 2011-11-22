@@ -77,9 +77,11 @@ type RegionSet = S.IntSet
 type PointSet = S.IntSet
 type EdgeMap = M.IntMap Int
 
-data Graph = Graph
+type RegionGraph = M.IntMap Region
+
+data GraphBuilder = GraphBuilder
     { regionMap  :: !RegionMap
-    , regions    :: M.IntMap Region
+    , regions    :: !RegionGraph
     , openRegions    :: !RegionSet
     , graphSize         :: !Size
     , regionDistance    :: !Int

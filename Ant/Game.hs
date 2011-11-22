@@ -9,7 +9,7 @@ module Ant.Game
      , module Ant.IO
      , module Ant.Map
      , module Ant.Scenario
-     , module Ant.Graph
+     , module Ant.GraphBuilder
      , module Ant.Passibility
      
      )
@@ -25,8 +25,9 @@ import Ant.IO
 import Ant.Map
 import Ant.Scenario
 import Ant.Square
-import Ant.Graph
+import Ant.GraphBuilder
 import Ant.Passibility
+import Ant.RegionStats
 
 import System.Random
 import Debug.Trace
@@ -37,7 +38,7 @@ type Game a = StateT GameState IO a
 data GameState = GameState
     { gameSettings      :: !GameSettings
     , gameMap           :: Map
-    , gameGraph         :: Graph
+    , gameGraph         :: GraphBuilder
     , gamePass          :: Passibility
     }
 
@@ -57,14 +58,14 @@ getSetting f = gets (f . gameSettings)
 contentSquares :: (Content -> Bool) -> [SquareContent] -> [Point]
 contentSquares f content = map fst $ filter (f . snd) content    
           
-initRegions :: [SquareContent] -> Graph -> Graph
+initRegions :: [SquareContent] -> GraphBuilder -> GraphBuilder
 initRegions content graph = foldr addRegion graph hillRegions where 
     hills = contentSquares (playerHill 0) content
     hillRegions = filter isUnknown hills   
     isUnknown p = invalidRegion == graph `regionAt` p
     
     
-modifyGraph :: (Graph -> Graph) -> Game ()
+modifyGraph :: (GraphBuilder -> GraphBuilder) -> Game ()
 modifyGraph f = modify $ \state -> state { gameGraph = f (gameGraph state) }
  
 modifyMap :: (Map -> Map) -> Game ()

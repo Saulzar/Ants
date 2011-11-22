@@ -158,7 +158,7 @@ drawTextAt (Point x y) str = do
     moveTo (fromIntegral x + 0.4 - textExtentsWidth ext * 0.5) (fromIntegral y  + textExtentsHeight ext * 0.5)
     showText str
             
-renderGraph :: Graph -> Render()
+renderGraph :: GraphBuilder -> Render()
 renderGraph graph = do      
 
     setLineWidth 0.3
@@ -195,7 +195,7 @@ mapColours world c p   | isWater square         = black
 
 
 
-graphColours :: Map -> Graph -> Point -> Colour Double
+graphColours :: Map -> GraphBuilder -> Point -> Colour Double
 graphColours world graph p = mapColours world colour p  
      where                   
         (region, distance) = graph `graphSquare` p 

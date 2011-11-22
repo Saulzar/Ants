@@ -1,11 +1,15 @@
-module RegionStats where
+module Ant.RegionStats where
 
 import Data.List
 
-import Ant.Game
-import Ant.Renderer
+import Ant.Map
+import Ant.Point
+import Ant.GraphBuilder
+import Ant.IO
 
 import qualified Data.Set as S
+import qualified Data.IntMap as M
+
 import Control.Monad.ST
 import Control.Monad
 
@@ -13,9 +17,10 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
 import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as UV
+import qualified Data.Vector.Mutable as VM
 
-type AntSet = S.Set AntOrders
+
+type AntSet = S.Set AntTask
 
 data RegionContents = RegionContents
     { friendlyAnts  :: ![Point]
@@ -23,12 +28,13 @@ data RegionContents = RegionContents
     , foodSquares   :: ![Point]
     , friendlyHill :: Maybe Point
     , enemyHill    :: Maybe Point
-	
-	, numFriendlies :: !Int
-	, numEnemies	:: !Int
+	, region 		:: !Region 
     }
+	
+addContent :: RegionContents -> SquareContents -> RegionContents
+addContent rc (p, c) = rc
      
-emptyContents = RegionContents
+emptyContents region = RegionContents
 		{ friendlyAnts 	= []
 		, enemyAnts 	= []
 		, foodSquares 	= []
@@ -36,19 +42,27 @@ emptyContents = RegionContents
 		, enemyHill	 	= Nothing
 		, numFriendlies = 0
 		, numEnemies 	= 0
+		, region		= region
 		}
 		
-data Assignment  = Unassigned | Goto !RegionIndex | Gather !Point | Guard
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard
         
-data AntOrders = AntOrders
-    { antAssign :: !Assignment
-    ,  antPos    :: !Point
+data AntTask = AntTask
+    { antTask  :: !Task
+    , antPos   :: !Point
     }
-instance Eq AntOrders where
+	
+instance Eq AntTask where
     (==) a b = (antPos a == antPos b)
     
-instance Ord AntOrders where
+instance Ord AntTask where
     compare a b = antPos a `compare` antPos b
+	
+makeAnt :: SquareContent -> AntTask
+makeAnt (p, _) = AntTask 
+	{ antTask = Unassigned
+	, antPos   = p
+	}
 
 regionVisibility :: Int -> RegionMap -> U.Vector Bool -> U.Vector Int
 regionVisibility numRegions regionMap visible = runST countVisible
@@ -62,13 +76,27 @@ regionVisibility numRegions regionMap visible = runST countVisible
                 UM.unsafeWrite v i (n + 1)
                 
             U.unsafeFreeze v
-	{-
-regionStats :: Int -> [SquareContent] -> RegionMap -> (AntSet, V.Vector RegionContents)
-regionStats numRegions content regionMap = runST regionStats'
+
+
+antSet :: [SquareContent] -> AntSet
+antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd) 
 	
+	
+regionStats :: RegionGraph -> [SquareContent] -> GraphBuilder -> V.Vector RegionContents
+regionStats regionGraph content builder = runST regionStats'
 	where 
-		(ourAnts, content') = partition (playerAnt 0 . snd) content
-		antSet = S.fromList (map makeAnt ourAnts)
-		
+		regionStats' :: ST s (V.Vector RegionContents)
 		regionStats' = do
-			-}
+			v <- VM.new (M.size regionGraph)
+			
+			forM_ (M.toList regionGraph) $ \(i, r) -> do
+				VM.unsafeWrite v i (emptyContents r)
+				
+			forM_ content $ \(p, c) -> do
+				let i = builder `regionAt` p
+			
+				rc <- VM.unsafeRead v i 
+				VM.unsafeWrite v i (rc `addContent` (p, c))
+				
+			V.unsafeFreeze v
+			
