@@ -77,6 +77,11 @@ type RegionSet = S.IntSet
 type PointSet = S.IntSet
 type EdgeMap = M.IntMap Int
 
+data Edge = Edge 
+    { edgeDistance      :: !Int
+    , edgeConnectivity  :: !Int
+    }
+
 type RegionGraph = M.IntMap Region
 
 data GraphBuilder = GraphBuilder
@@ -93,7 +98,8 @@ data Region = Region
      {  regionCentre  :: !Point
      ,  regionId      :: !RegionIndex
      ,  regionNeighbors :: !EdgeMap
-     ,  regionSize      :: !Int
+     ,  regionSize      :: !Int         -- Size in map squares
+     ,  regionSeen      :: !Int         -- Turn this region was last n% visible
      } deriving Show
 
      

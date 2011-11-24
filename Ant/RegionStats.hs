@@ -21,28 +21,31 @@ import qualified Data.Vector.Mutable as VM
 
 
 type AntSet = S.Set AntTask
+type AntList = [(Point, Player)]
 
 data RegionContents = RegionContents
-    { friendlyAnts  :: ![Point]
-    , enemyAnts  	:: ![(Point, Player)]
-    , foodSquares   :: ![Point]
-    , friendlyHill :: Maybe Point
-    , enemyHill    :: Maybe Point
-	, region 		:: !Region 
+    { contentAnts       :: AntList
+    , contentNearAnts   :: AntList
+    , contentFood   :: [Point]
+    , contentHills  :: [(Point, Player)]
+    
+    , hillDistance :: Int
+    , contentRegion :: Region
     }
 	
 addContent :: RegionContents -> SquareContents -> RegionContents
-addContent rc (p, c) = rc
+addContent rc (p, Ant n)    = rc { contentAnts    = (p, n) : contentAnts rc }
+addContent rc (p, Hill n)   = rc { contentHills = p : contentHills rc }
+addContent rc (p, Food)     = rc { contentFood  = p : contentFood rc }
+addContent rc _             = rc
      
 emptyContents region = RegionContents
-		{ friendlyAnts 	= []
-		, enemyAnts 	= []
-		, foodSquares 	= []
-		, friendlyHill	= Nothing
-		, enemyHill	 	= Nothing
-		, numFriendlies = 0
-		, numEnemies 	= 0
-		, region		= region
+		{ rcAnts 	= []
+		, rcFood 	= []
+		, rcHills 	= []
+        , rcNearAnts = []
+        , rcDistance = 0
+		, rcRegion	 = region
 		}
 		
 data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard
@@ -81,16 +84,25 @@ regionVisibility numRegions regionMap visible = runST countVisible
 antSet :: [SquareContent] -> AntSet
 antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd) 
 	
-	
-regionStats :: RegionGraph -> [SquareContent] -> GraphBuilder -> V.Vector RegionContents
-regionStats regionGraph content builder = runST regionStats'
+    
+
+contentNeighbors :: RegionContents -> ContentGraph -> [(RegionContents, Edge)]
+contentNeighbors rc graph = map fromIndex edges
+    where 
+        edges = (M.toList . regionNeighbors . contentRegion) rc
+        fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
+    
+
+regionStats :: U.Vector Int -> RegionGraph -> [SquareContent] -> GraphBuilder -> V.Vector RegionContents
+regionStats visibility regionGraph content builder = runST regionStats'
 	where 
 		regionStats' :: ST s (V.Vector RegionContents)
 		regionStats' = do
 			v <- VM.new (M.size regionGraph)
 			
 			forM_ (M.toList regionGraph) $ \(i, r) -> do
-				VM.unsafeWrite v i (emptyContents r)
+                let r' = updateRegionVisible (visibility `U.unsafeIndex` i) r 
+				VM.unsafeWrite v i (emptyContents r')
 				
 			forM_ content $ \(p, c) -> do
 				let i = builder `regionAt` p
