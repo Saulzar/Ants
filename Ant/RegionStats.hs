@@ -19,18 +19,19 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
+import qualified Data.PriorityQueue.FingerTree as Q
 
 type AntSet = S.Set AntTask
 type AntList = [(Point, Player)]
 
 data RegionContents = RegionContents
-    { contentAnts       :: AntList
-    , contentNearAnts   :: AntList
-    , contentFood   :: [Point]
-    , contentHills  :: [(Point, Player)]
+    { rcAnts       :: AntList
+    , rcNearAnts   :: AntList
+    , rcFood   :: [Point]
+    , rcHills  :: [(Point, Player)]
     
-    , hillDistance :: Int
-    , contentRegion :: Region
+    , rcHillDistance :: Int
+    , rcRegion :: Region
     }
 	
 addContent :: RegionContents -> SquareContents -> RegionContents
@@ -44,7 +45,7 @@ emptyContents region = RegionContents
 		, rcFood 	= []
 		, rcHills 	= []
         , rcNearAnts = []
-        , rcDistance = 0
+        , rcHillDistance = 1000
 		, rcRegion	 = region
 		}
 		
@@ -80,6 +81,10 @@ regionVisibility numRegions regionMap visible = runST countVisible
                 
             U.unsafeFreeze v
 
+updateRegionVisible :: Int -> Region -> Region
+updateRegionVisible numVisible region | visible   = region { regionLastSeen = 0 }
+									  | otherwise = region { regionLastSeen = (regionLastSeen region) + 1 } 
+	where visible = (regionSize * 100 `div` visible) > 80
 
 antSet :: [SquareContent] -> AntSet
 antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd) 
@@ -92,6 +97,40 @@ contentNeighbors rc graph = map fromIndex edges
         edges = (M.toList . regionNeighbors . contentRegion) rc
         fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
     
+neighborDistances :: RegionIndex -> V.Vector RegionContents -> [(Distance, RegionIndex)]
+neighborDistances r graph = 
+	
+type Queue = Q.PQueue Distance PointIndex 	
+	
+hillDistances :: V.Vector RegionContents -> [RegionIndex] -> U.Vector Int
+hillDistances contents hills = runST (searchHills hillQueue)
+	where 	
+		initialQueue = Q.fromList (zip [0..] hills)
+		
+		--insertQueue queue  =  foldr (\(r, d) -> Q.insert d r) queue
+		
+		searchHills :: ST s (U.Vector Int)
+		searchHills = do
+			v <- UM.replicate (V.size contents) 1000  
+			forM_ hills $ \r -> UM.unsafeWrite v r 0
+			
+		
+		searchHills' v queue | Nothing 				  <- view = v	
+							 | (Just ((d, r), queue') <- view = do
+				
+				
+			                             
+			where
+			
+				view = Q.minViewWithKey q
+			
+
+takeOne :: SearchState -> (Maybe Sq, SearchState)
+takeOne state | Nothing            <- view  = (Nothing, state)
+              | Just ((d, p), queue')  <- view  = (Just (p, d), state { searchQueue = queue' })
+        where
+            view = 
+
 
 regionStats :: U.Vector Int -> RegionGraph -> [SquareContent] -> GraphBuilder -> V.Vector RegionContents
 regionStats visibility regionGraph content builder = runST regionStats'

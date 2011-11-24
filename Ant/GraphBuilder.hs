@@ -6,6 +6,9 @@ module Ant.GraphBuilder
     , Region (..)
     , RegionIndex
 	, RegionGraph
+	
+	, EdgeMap
+	, Edge
     
     , regions
     , regionMap
@@ -76,7 +79,10 @@ type Queue = Q.PQueue Distance PointIndex
 
 type RegionSet = S.IntSet
 type PointSet = S.IntSet
-type EdgeMap = M.IntMap Int
+
+type Edge = Int
+type EdgeMap = M.IntMap Edge
+
 type RegionGraph = M.IntMap Region
 
 data GraphBuilder = GraphBuilder
@@ -94,6 +100,7 @@ data Region = Region
      ,  regionId      :: !RegionIndex
      ,  regionNeighbors :: !EdgeMap
      ,  regionSize      :: !Int
+	 ,  regionLastSeen  :: !Int
      } deriving Show
 
      
@@ -170,6 +177,7 @@ addRegion centre graph = graph
                 , regionCentre  = centre
                 , regionNeighbors = M.empty
                 , regionSize      = 0
+				, regionLastSeen  = 0
                 }
              
 
@@ -207,12 +215,12 @@ neighborSquares size visited  = (S.fromList . concatMap neighbors) (M.toList vis
         neighbors (p, _) = filter (\p' -> M.notMember p' visited) $ neighborIndices size p 
 
 
-countAssocs :: [(Int, Int)] -> M.IntMap Int
+countAssocs :: [(Int, Int)] -> EdgeMap
 countAssocs = foldr insert M.empty
     where insert = uncurry (M.insertWith (+))
 
         
-neighborRegions :: RegionMap -> PointSet -> M.IntMap Int
+neighborRegions :: RegionMap -> PointSet -> EdgeMap
 neighborRegions regions neighbors =  countAssocs regions' where
     
     regions' = map regionSquare (S.toList neighbors)    
@@ -242,7 +250,7 @@ hasNeighbor graph source dest = isJust $ do
 neighborsValid:: GraphBuilder -> Bool
 neighborsValid graph = all (uncurry (hasNeighbor graph)) pairs
     where 
-        neighbourPairs r = map (\(i, n) -> (i, regionId r)) $ M.toList (regionNeighbors r)
+        neighbourPairs r = map (\(i, _) -> (i, regionId r)) $ M.toList (regionNeighbors r)
         pairs = concatMap neighbourPairs (map snd $ M.toList (regions graph))
 
         
