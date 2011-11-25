@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Ant.RegionStats where
 
 import Data.List
@@ -24,6 +26,8 @@ import qualified Data.PriorityQueue.FingerTree as Q
 type AntSet = S.Set AntTask
 type AntList = [(Point, Player)]
 
+type ContentGraph = V.Vector RegionContents
+
 data RegionContents = RegionContents
     { rcAnts       :: AntList
     , rcNearAnts   :: AntList
@@ -34,10 +38,10 @@ data RegionContents = RegionContents
     , rcRegion :: Region
     }
 	
-addContent :: RegionContents -> SquareContents -> RegionContents
-addContent rc (p, Ant n)    = rc { contentAnts    = (p, n) : contentAnts rc }
-addContent rc (p, Hill n)   = rc { contentHills = p : contentHills rc }
-addContent rc (p, Food)     = rc { contentFood  = p : contentFood rc }
+addContent :: RegionContents -> SquareContent -> RegionContents
+addContent rc (p, Ant n)    = rc { rcAnts    = (p, n) : rcAnts rc }
+addContent rc (p, Hill n)   = rc { rcHills = (p, n) : rcHills rc }
+addContent rc (p, Food)     = rc { rcFood  = p : rcFood rc }
 addContent rc _             = rc
      
 emptyContents region = RegionContents
@@ -84,7 +88,7 @@ regionVisibility numRegions regionMap visible = runST countVisible
 updateRegionVisible :: Int -> Region -> Region
 updateRegionVisible numVisible region | visible   = region { regionLastSeen = 0 }
 									  | otherwise = region { regionLastSeen = (regionLastSeen region) + 1 } 
-	where visible = (regionSize * 100 `div` visible) > 80
+	where visible = (regionSize region * 100 `div` numVisible) > 80
 
 antSet :: [SquareContent] -> AntSet
 antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd) 
@@ -92,62 +96,65 @@ antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd)
     
 
 contentNeighbors :: RegionContents -> ContentGraph -> [(RegionContents, Edge)]
-contentNeighbors rc graph = map fromIndex edges
-    where 
-        edges = (M.toList . regionNeighbors . contentRegion) rc
-        fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
+contentNeighbors rc graph = map fromIndex (contentNeighbors' rc)
+    where fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
+    
+contentNeighbors' :: RegionContents -> [(RegionIndex, Edge)]
+contentNeighbors' = M.toList . regionNeighbors . rcRegion
     
 neighborDistances :: RegionIndex -> V.Vector RegionContents -> [(Distance, RegionIndex)]
-neighborDistances r graph = 
-	
-type Queue = Q.PQueue Distance PointIndex 	
-	
-hillDistances :: V.Vector RegionContents -> [RegionIndex] -> U.Vector Int
-hillDistances contents hills = runST (searchHills hillQueue)
-	where 	
-		initialQueue = Q.fromList (zip [0..] hills)
-		
-		--insertQueue queue  =  foldr (\(r, d) -> Q.insert d r) queue
-		
-		searchHills :: ST s (U.Vector Int)
-		searchHills = do
-			v <- UM.replicate (V.size contents) 1000  
-			forM_ hills $ \r -> UM.unsafeWrite v r 0
-			
-		
-		searchHills' v queue | Nothing 				  <- view = v	
-							 | (Just ((d, r), queue') <- view = do
-				
-				
-			                             
-			where
-			
-				view = Q.minViewWithKey q
-			
+neighborDistances i graph = (map toDistancePair . contentNeighbors') rc
+    where
+        rc = graph `V.unsafeIndex` i
+        toDistancePair (r, e) = (edgeDistance e, r)
 
-takeOne :: SearchState -> (Maybe Sq, SearchState)
-takeOne state | Nothing            <- view  = (Nothing, state)
-              | Just ((d, p), queue')  <- view  = (Just (p, d), state { searchQueue = queue' })
+	
+type Queue = Q.PQueue Distance RegionIndex 	
+	
+hillDistances :: ContentGraph -> [RegionIndex] -> U.Vector Int
+hillDistances contents hills = runST searchHills where 	
+    initialQueue = Q.fromList (zip [0..] hills)
+        
+    searchHills :: ST s (U.Vector Int)
+    searchHills = do
+        v <- UM.replicate (V.length contents) 1000  
+        forM_ hills $ \r -> UM.unsafeWrite v r 0
+        
+        searchHills' v initialQueue
+        U.unsafeFreeze v
+    
+    searchHills' v queue | Nothing 				  <- view = return ()	
+                         | Just ((d, r), queue') <- view = do
+            
+            successors <- filterM (isSuccessor d) (neighborDistances r contents)
+            forM_ successors $ \(d', r') -> UM.unsafeWrite v r' (d + d')
+            searchHills' v (foldr (uncurry Q.insert) queue successors)
+                                     
         where
-            view = 
+            view = Q.minViewWithKey queue  
+            
+            isSuccessor d (d', r') = do
+                d'' <- UM.unsafeRead v r'
+                return (d + d' < d'')
+                
+			
 
-
-regionStats :: U.Vector Int -> RegionGraph -> [SquareContent] -> GraphBuilder -> V.Vector RegionContents
+regionStats :: U.Vector Int -> RegionGraph -> [SquareContent] -> GraphBuilder -> ContentGraph
 regionStats visibility regionGraph content builder = runST regionStats'
-	where 
-		regionStats' :: ST s (V.Vector RegionContents)
-		regionStats' = do
-			v <- VM.new (M.size regionGraph)
-			
-			forM_ (M.toList regionGraph) $ \(i, r) -> do
+    where 
+        regionStats' :: ST s (V.Vector RegionContents)
+        regionStats' = do
+            v <- VM.new (M.size regionGraph)
+
+            forM_ (M.toList regionGraph) $ \(i, r) -> do
                 let r' = updateRegionVisible (visibility `U.unsafeIndex` i) r 
-				VM.unsafeWrite v i (emptyContents r')
-				
-			forM_ content $ \(p, c) -> do
-				let i = builder `regionAt` p
-			
-				rc <- VM.unsafeRead v i 
-				VM.unsafeWrite v i (rc `addContent` (p, c))
-				
-			V.unsafeFreeze v
+                VM.unsafeWrite v i (emptyContents r')
+                
+            forM_ content $ \(p, c) -> do
+                let i = builder `regionAt` p
+
+                rc <- VM.unsafeRead v i 
+                VM.unsafeWrite v i (rc `addContent` (p, c))
+                
+            V.unsafeFreeze v
 			

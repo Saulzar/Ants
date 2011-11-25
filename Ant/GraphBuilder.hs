@@ -8,7 +8,7 @@ module Ant.GraphBuilder
 	, RegionGraph
 	
 	, EdgeMap
-	, Edge
+	, Edge (..)
     
     , regions
     , regionMap
@@ -30,7 +30,6 @@ module Ant.GraphBuilder
     
     , searchRegion
     , neighborSquares
-    , neighborRegions
     
     , findChanges
     , neighborsValid
@@ -80,7 +79,11 @@ type Queue = Q.PQueue Distance PointIndex
 type RegionSet = S.IntSet
 type PointSet = S.IntSet
 
-type Edge = Int
+data Edge = Edge 
+    { edgeDistance :: !Int
+    , edgeConnectivity :: !Int
+    } deriving Show
+    
 type EdgeMap = M.IntMap Edge
 
 type RegionGraph = M.IntMap Region
@@ -215,20 +218,28 @@ neighborSquares size visited  = (S.fromList . concatMap neighbors) (M.toList vis
         neighbors (p, _) = filter (\p' -> M.notMember p' visited) $ neighborIndices size p 
 
 
-countAssocs :: [(Int, Int)] -> EdgeMap
-countAssocs = foldr insert M.empty
-    where insert = uncurry (M.insertWith (+))
 
+makeEdges :: Size -> Region -> M.IntMap Int -> RegionGraph -> EdgeMap
+makeEdges size region conn regions = M.mapWithKey edge conn 
+    where edge i c = Edge 
+            { edgeDistance = manhatten size (regionCentre region) (regionCentre region')
+            , edgeConnectivity = c
+            }
+            where
+                region' = fromJust (M.lookup i regions)
         
-neighborRegions :: RegionMap -> PointSet -> EdgeMap
-neighborRegions regions neighbors =  countAssocs regions' where
+connectivity ::  RegionMap -> PointSet -> M.IntMap Int
+connectivity regions neighbors =  countAssocs regions' where
     
     regions' = map regionSquare (S.toList neighbors)    
     regionSquare p = (r, 1)
         where (r, d) = regions `indexSq` p 
               
+countAssocs :: [(Int, Int)] -> M.IntMap Int
+countAssocs = foldr insert M.empty
+    where insert = uncurry (M.insertWith (+))              
               
-updateNeighbor :: RegionIndex -> M.IntMap Int -> Region -> Region              
+updateNeighbor :: RegionIndex -> EdgeMap -> Region -> Region              
 updateNeighbor index revNeighbors region | (Just n) <- entry = region  { regionNeighbors = withEntry n }  
                                          | Nothing  <- entry = region { regionNeighbors = withoutEntry }
         where
@@ -237,7 +248,7 @@ updateNeighbor index revNeighbors region | (Just n) <- entry = region  { regionN
             withoutEntry    = M.delete index (regionNeighbors region)
             withEntry n     = M.insert index n withoutEntry
 
-updateNeighbors :: RegionIndex -> [RegionIndex] -> M.IntMap Int -> M.IntMap Region -> M.IntMap Region
+updateNeighbors :: RegionIndex -> [RegionIndex] -> EdgeMap -> RegionGraph -> RegionGraph
 updateNeighbors index changed neighbors rs = foldr update rs changed
     where update = M.update (Just . updateNeighbor index neighbors)
  
@@ -247,7 +258,7 @@ hasNeighbor graph source dest = isJust $ do
     s <- source `M.lookup` (regions graph)
     dest `M.lookup` (regionNeighbors s)
         
-neighborsValid:: GraphBuilder -> Bool
+neighborsValid :: GraphBuilder -> Bool
 neighborsValid graph = all (uncurry (hasNeighbor graph)) pairs
     where 
         neighbourPairs r = map (\(i, _) -> (i, regionId r)) $ M.toList (regionNeighbors r)
@@ -270,8 +281,10 @@ expandRegion pass world graph region = open' `seq` graph
         (changedSquares, changedRegions) =  findChanges (regionMap graph) visited      
 
         neighbors = neighborSquares (mapSize world) visited
-        regionNeighbors' = M.delete invalidRegion (neighborRegions (regionMap graph) neighbors) 
-
+        
+        conn = M.delete invalidRegion $ connectivity regionMap' neighbors
+        regionNeighbors' = makeEdges (graphSize graph) region conn (regions graph)
+        
         unseen    = any (isUnseen) (S.toList neighbors) where
             isUnseen p = (not . wasSeen) (world `atIndex` p)
 
