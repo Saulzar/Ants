@@ -9,8 +9,10 @@ module Ant.Game
      , module Ant.IO
      , module Ant.Map
      , module Ant.Scenario
-     , module Ant.GraphBuilder
+     , module Ant.RegionBuilder
      , module Ant.Passibility
+     , module Ant.RegionStats
+     , module Ant.Graph
      
      )
     where
@@ -25,9 +27,10 @@ import Ant.IO
 import Ant.Map
 import Ant.Scenario
 import Ant.Square
-import Ant.GraphBuilder
+import Ant.RegionBuilder
 import Ant.Passibility
 import Ant.RegionStats
+import Ant.Graph
 
 import System.Random
 import Debug.Trace
@@ -38,8 +41,10 @@ type Game a = StateT GameState IO a
 data GameState = GameState
     { gameSettings      :: !GameSettings
     , gameMap           :: Map
-    , gameGraph         :: GraphBuilder
+    , gameBuilder       :: RegionBuilder
     , gamePass          :: Passibility
+	, gameStats			:: GameStats
+    , gameGraph         :: Graph
     }
 
  
@@ -47,8 +52,10 @@ initialState :: GameSettings -> GameState
 initialState settings = GameState 
     { gameSettings    = settings
     , gameMap         = emptyMap unknownSquare (mapDimensions settings) 
-    , gameGraph       = emptyGraph (mapDimensions settings) 32
-    , gamePass = emptyPassibility (mapDimensions settings) pattern2
+    , gameBuilder     = emptyBuilder (mapDimensions settings) 32
+    , gamePass 		  = emptyPassibility (mapDimensions settings) pattern2
+	, gameStats		  = initialStats 
+    , gameGraph       = grEmpty
     }
  
  
@@ -57,16 +64,16 @@ getSetting f = gets (f . gameSettings)
 
 contentSquares :: (Content -> Bool) -> [SquareContent] -> [Point]
 contentSquares f content = map fst $ filter (f . snd) content    
-          
-initRegions :: [SquareContent] -> GraphBuilder -> GraphBuilder
-initRegions content graph = foldr addRegion graph hillRegions where 
+           
+initRegions :: [SquareContent] -> RegionBuilder -> RegionBuilder
+initRegions content builder = foldr addRegion builder hillRegions where 
     hills = contentSquares (playerHill 0) content
     hillRegions = filter isUnknown hills   
-    isUnknown p = invalidRegion == graph `regionAt` p
+    isUnknown p = invalidRegion == regionAt (regionMap builder) (builderDim builder) p
     
     
-modifyGraph :: (GraphBuilder -> GraphBuilder) -> Game ()
-modifyGraph f = modify $ \state -> state { gameGraph = f (gameGraph state) }
+modifyBuilder :: (RegionBuilder -> RegionBuilder) -> Game ()
+modifyBuilder f = modify $ \state -> state { gameBuilder = f (gameBuilder state) }
  
 modifyMap :: (Map -> Map) -> Game ()
 modifyMap f = modify $ \state -> state { gameMap = f (gameMap state) }
@@ -85,24 +92,31 @@ updateState content = do
     let vis = visibleSet (mapSize world) radiusSq ants
     let dVis = newlyVisible vis world
 
-    n <- gets (numRegions . gameGraph)
-    when (n == 0) $ modifyGraph (initRegions content) 
+    n <- gets (numRegions . gameBuilder)
+    when (n == 0) $ modifyBuilder (initRegions content) 
     
     let world' = (updateContent content . updateVisibility vis) world
 
     pass <- gets gamePass 
     let pass' = updatePassibility dVis world' pass
 
-    graph <- gets gameGraph
-    let graph' = updateGraph pass' world' graph
-    
-    
-    --let graph' = updateGraph 
+    builder <- gets gameBuilder
+    let builder' = updateBuilder pass' world' builder
+
+    stats <- gets gameStats
+	
+    let graph = grCreate (regions builder')
+    let stats' = updateStats world' graph (regionMap builder') vis content stats
+
+    liftIO $ print stats'
+
 
     modify $ \gameState -> gameState 
         { gameMap = world'
         , gamePass = pass'
-        , gameGraph = graph'
+        , gameBuilder = builder'
+    	, gameStats = stats'
+        , gameGraph = graph
         }
 
     

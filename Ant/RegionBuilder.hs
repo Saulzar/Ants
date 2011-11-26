@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 
-module Ant.GraphBuilder
-    ( GraphBuilder
+module Ant.RegionBuilder
+    ( RegionBuilder
     , RegionMap
     , Region (..)
     , RegionIndex
@@ -12,7 +12,7 @@ module Ant.GraphBuilder
     
     , regions
     , regionMap
-    , graphSize
+    , builderDim
     
     , numRegions
     , regionAt
@@ -20,11 +20,11 @@ module Ant.GraphBuilder
     , Distance
     , invalidRegion
         
-    , emptyGraph
+    , emptyBuilder
     , addRegion
-    , updateGraph
+    , updateBuilder
     
-    , graphSquare
+    , regionSquare
     , regionDistance
     , setAllOpen
     
@@ -88,19 +88,19 @@ type EdgeMap = M.IntMap Edge
 
 type RegionGraph = M.IntMap Region
 
-data GraphBuilder = GraphBuilder
-    { regionMap  :: !RegionMap
-    , regions    :: RegionGraph
-    , openRegions    :: !RegionSet
-    , graphSize         :: !Size
+data RegionBuilder = RegionBuilder
+    { regionMap  		:: !RegionMap
+    , regions    		:: RegionGraph
+    , openRegions       :: !RegionSet
+    , builderDim        :: !Size
     , regionDistance    :: !Int
     , candidates        :: !PointSet
     }
     
     
 data Region = Region 
-     {  regionCentre  :: !Point
-     ,  regionId      :: !RegionIndex
+     {  regionCentre  	:: !Point
+     ,  regionId      	:: !RegionIndex
      ,  regionNeighbors :: !EdgeMap
      ,  regionSize      :: !Int
 	 ,  regionFrontier  :: !Bool
@@ -113,73 +113,74 @@ indexSq = U.unsafeIndex
 invalidRegion :: RegionIndex
 invalidRegion = -1
      
-emptyGraph :: Size -> Int -> GraphBuilder
-emptyGraph size distance = GraphBuilder 
+emptyBuilder :: Size -> Int -> RegionBuilder
+emptyBuilder size distance = RegionBuilder 
     { regionMap = (U.replicate (area size) (invalidRegion, 1000 )) 
     , regions   = M.empty    
     , openRegions = S.empty
-    , graphSize = size
+    , builderDim = size
     , regionDistance = distance
     , candidates = S.empty
     }
      
 
-regionAt :: GraphBuilder -> Point -> RegionIndex
-regionAt graph p = fst $ regionMap graph `indexSq` index where
-   index = graphSize graph `wrapIndex` p 
+regionAt :: RegionMap -> Size -> Point -> RegionIndex
+regionAt regionMap worldSize p = fst $ regionMap `indexSq` index where
+   index = worldSize `wrapIndex` p 
 {-# INLINE regionAt #-}      
      
-numRegions :: GraphBuilder -> Int
-numRegions graph = M.size (regions graph)     
+numRegions :: RegionBuilder -> Int
+numRegions builder = M.size (regions builder)     
      
-updateRegion :: Passibility -> Map -> RegionIndex -> GraphBuilder -> GraphBuilder
-updateRegion pass world i graph = (expandRegion pass world graph region) 
-    where (Just region) = M.lookup i (regions graph) 
+updateRegion :: Passibility -> Map -> RegionIndex -> RegionBuilder -> RegionBuilder
+updateRegion pass world i builder = (expandRegion pass world builder region) 
+    where (Just region) = M.lookup i (regions builder) 
 
-setAllOpen :: GraphBuilder -> GraphBuilder 
-setAllOpen graph = graph { openRegions = S.fromList [0.. M.size (regions graph)] }
+setAllOpen :: RegionBuilder -> RegionBuilder 
+setAllOpen builder = builder { openRegions = S.fromList [0.. M.size (regions builder)] }
        
-updateGraph :: Passibility -> Map -> GraphBuilder -> GraphBuilder
-updateGraph pass world graph =  (seedRegions pass . expandGraph pass world) graph 
+updateBuilder :: Passibility -> Map -> RegionBuilder -> RegionBuilder
+updateBuilder pass world builder =  (seedRegions pass . expandGraph pass world) builder 
 
 
-expandGraph :: Passibility -> Map -> GraphBuilder -> GraphBuilder
-expandGraph pass world graph =  foldr (flip (expandRegion pass world)) graph open
+expandGraph :: Passibility -> Map -> RegionBuilder -> RegionBuilder
+expandGraph pass world builder =  foldr (flip (expandRegion pass world)) builder open
     where
-        open = catMaybes . map (flip M.lookup (regions graph)) $ rs
-        rs = S.toList (openRegions graph)
+        open = catMaybes . map (flip M.lookup (regions builder)) $ rs
+        rs = S.toList (openRegions builder)
      
      
-seedRegions :: Passibility -> GraphBuilder -> GraphBuilder
-seedRegions pass graph = graph' { candidates = S.empty }
+seedRegions :: Passibility -> RegionBuilder -> RegionBuilder
+seedRegions pass builder = builder' { candidates = S.empty }
     where 
-        seeds = findSeeds pass graph
-        graph' = foldr addRegion graph (map (fromIndex (graphSize graph)) seeds)
+        seeds = findSeeds pass builder
+        builder' = foldr addRegion builder (map (fromIndex (builderDim builder)) seeds)
      
 seedDistance :: Int
 seedDistance = 8
      
-findSeeds :: Passibility -> GraphBuilder -> [PointIndex]
-findSeeds pass graph = separate (manhattenIndex (graphSize graph)) maxDistance prioritised
+findSeeds :: Passibility -> RegionBuilder -> [PointIndex]
+findSeeds pass builder = separate (manhattenIndex (builderDim builder)) maxDistance prioritised
     where
-        candidates' = (filter validSeed . S.toList) (candidates graph)
+        candidates' = (filter validSeed . S.toList) (candidates builder)
         prioritised = sortBy (compare `on` (indexCost pass)) candidates'
-        distance = snd . (regionMap graph `indexSq`)
+        distance = snd . (regionMap builder `indexSq`)
         
         validSeed p = distance p > seedDistance && pass `indexCost` p < 8
         
         
-addRegion :: Point -> GraphBuilder -> GraphBuilder
-addRegion centre graph = graph 
-            { regions = M.insert (regionId region) region (regions graph)
-            , openRegions = S.insert (regionId region) (openRegions graph) 
+addRegion :: Point -> RegionBuilder -> RegionBuilder
+addRegion centre builder = builder 
+            { regions = M.insert (regionId region) region (regions builder)
+            , openRegions = S.insert (regionId region) (openRegions builder) 
             }
         where
             region  = Region 
-                { regionId      = numRegions graph
+                { regionId      = numRegions builder
                 , regionCentre  = centre
                 , regionNeighbors = M.empty
                 , regionSize      = 0
+                , regionFrontier  = True
                 }
              
 
@@ -193,9 +194,9 @@ separate metric distance = foldl' add []
 {-# INLINE separate #-}       
 
             
-graphSquare :: GraphBuilder -> Point ->  (RegionIndex, Distance)   
-graphSquare graph p = (regionMap graph) `indexSq` (wrapIndex (graphSize graph) p)  
-{-# INLINE graphSquare #-}       
+regionSquare :: RegionBuilder -> Point ->  (RegionIndex, Distance)   
+regionSquare builder p = (regionMap builder) `indexSq` (wrapIndex (builderDim builder) p)  
+{-# INLINE regionSquare #-}       
      
 updateBy :: V.Vector a -> [a] -> (a -> Int) -> V.Vector a
 updateBy v updates f =  v V.// map (\x -> (f x, x)) updates     
@@ -252,52 +253,52 @@ updateNeighbors index changed neighbors rs = foldr update rs changed
     where update = M.update (Just . updateNeighbor index neighbors)
  
 
-hasNeighbor :: GraphBuilder -> Int -> Int -> Bool
-hasNeighbor graph source dest = isJust $ do 
-    s <- source `M.lookup` (regions graph)
+hasNeighbor :: RegionBuilder -> Int -> Int -> Bool
+hasNeighbor builder source dest = isJust $ do 
+    s <- source `M.lookup` (regions builder)
     dest `M.lookup` (regionNeighbors s)
         
-neighborsValid :: GraphBuilder -> Bool
-neighborsValid graph = all (uncurry (hasNeighbor graph)) pairs
+neighborsValid :: RegionBuilder -> Bool
+neighborsValid builder = all (uncurry (hasNeighbor builder)) pairs
     where 
         neighbourPairs r = map (\(i, _) -> (i, regionId r)) $ M.toList (regionNeighbors r)
-        pairs = concatMap neighbourPairs (map snd $ M.toList (regions graph))
+        pairs = concatMap neighbourPairs (map snd $ M.toList (regions builder))
 
         
-expandRegion :: Passibility -> Map -> GraphBuilder -> Region -> GraphBuilder
-expandRegion pass world graph region = open' `seq` graph 
+expandRegion :: Passibility -> Map -> RegionBuilder -> Region -> RegionBuilder
+expandRegion pass world builder region = open' `seq` builder 
     { regionMap    = regionMap'
     , openRegions  = open'
     --, regions = M.map updateNeighbor' regions' 
     , regions      = updateNeighbors (regionId region) changedNeighbors regionNeighbors' regions'
-    , candidates   = foldr S.insert  (candidates graph) (map fst changedSquares)
+    , candidates   = foldr S.insert  (candidates builder) (map fst changedSquares)
     }
     
     where
-        regionMap' = writeSquares (regionId region) changedSquares (regionMap graph)
+        regionMap' = writeSquares (regionId region) changedSquares (regionMap builder)
     
-        visited = searchRegion pass world (regionMap graph) region
-        (changedSquares, changedRegions) =  findChanges (regionMap graph) visited      
+        visited = searchRegion pass world (regionMap builder) region
+        (changedSquares, changedRegions) =  findChanges (regionMap builder) visited      
 
         neighbors = neighborSquares (mapSize world) visited
         
         conn = M.delete invalidRegion $ connectivity regionMap' neighbors
-        regionNeighbors' = makeEdges (graphSize graph) region conn (regions graph)
+        regionNeighbors' = makeEdges (builderDim builder) region conn (regions builder)
         
         unseen    = any (isUnseen) (S.toList neighbors) where
             isUnseen p = (not . wasSeen) (world `atIndex` p)
 
         open' | unseen    = set
               | otherwise = S.delete (regionId region) set
-           where set = foldr S.insert (openRegions graph) (filter (/= invalidRegion) changedRegions)
+           where set = foldr S.insert (openRegions builder) (filter (/= invalidRegion) changedRegions)
 
         region' = region 
 			{ regionNeighbors 	= regionNeighbors'
 			, regionSize 		= M.size visited 
-			, regionFronteir 	= unseen
+			, regionFrontier 	= unseen
 			}
 			
-        regions' = M.insert (regionId region) region' (regions graph)
+        regions' = M.insert (regionId region) region' (regions builder)
 
         --updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
         changedNeighbors = map fst $ M.toList (M.union (regionNeighbors region) regionNeighbors') 

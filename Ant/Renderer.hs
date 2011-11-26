@@ -108,18 +108,18 @@ worldColour :: Map -> Point -> Colour Double
 worldColour world p = squareColour (world `at` p)
 {-# INLINE worldColour #-}
 
-regionColours :: V.Vector (Colour Double)
-regionColours = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, brown, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
+regionColourSet :: V.Vector (Colour Double)
+regionColourSet = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, brown, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
 
 regionColour ::  Int -> Colour Double
-regionColour i = regionColours `V.unsafeIndex` (i `mod` V.length regionColours)
+regionColour i = regionColourSet `V.unsafeIndex` (i `mod` V.length regionColourSet)
 
-antColours :: V.Vector (Colour Double)
-antColours = V.fromList [white, lightgreen, orange, darkturquoise, red, blue, lightsalmon, mediumpurple]
+antColourSet :: V.Vector (Colour Double)
+antColourSet = V.fromList [white, lightgreen, orange, darkturquoise, red, blue, lightsalmon, mediumpurple]
 
 
 antColour ::  Int -> Colour Double
-antColour i = antColours `V.unsafeIndex` (i `mod` V.length antColours)
+antColour i = antColourSet `V.unsafeIndex` (i `mod` V.length antColourSet)
 
 
 {-makeRGB (fromIntegral (i * 117 `mod` 360))  
@@ -158,17 +158,17 @@ drawTextAt (Point x y) str = do
     moveTo (fromIntegral x + 0.4 - textExtentsWidth ext * 0.5) (fromIntegral y  + textExtentsHeight ext * 0.5)
     showText str
             
-renderGraph :: GraphBuilder -> Render()
-renderGraph graph = do      
+renderGraph :: Size -> Graph -> Render()
+renderGraph worldSize graph = do      
 
     setLineWidth 0.3
     
     setSourceRGBA 1 1 0 0.4    
-    forM_ (M.toList (regions graph)) $ \(i, r) -> do  
-        forM_ (M.toList (regionNeighbors r)) $ \(j, n) -> do
+    forM_ (grRegions graph) $ \r -> do  
+          
+        forM_ (grNeighbors graph r) $ \(r', e) -> do
             
-            let r' = fromJust (j `M.lookup` (regions graph))
-            let d = wrapDiff (graphSize graph)  (regionCentre r)  (regionCentre r')
+            let d = wrapDiff worldSize  (regionCentre r)  (regionCentre r')
           
             drawLine' (regionCentre r) d
             stroke
@@ -176,7 +176,7 @@ renderGraph graph = do
     setFontSize 1.0
    
     
-    forM_ (M.toList (regions graph)) $ \(i, r) -> do 
+    forM_ (grRegions graph) $ \r -> do 
         setSourceRGB 0 0 0
         drawCircle (regionCentre r) 0.6 
         fill 
@@ -195,15 +195,14 @@ mapColours world c p   | isWater square         = black
 
 
 
-graphColours :: Map -> GraphBuilder -> Point -> Colour Double
-graphColours world graph p = mapColours world colour p  
-     where                   
-        (region, distance) = graph `graphSquare` p 
+regionColours :: Map -> RegionMap -> Point -> Colour Double
+regionColours world regionMap p = mapColours world colour p  
+     where                    
+        region = regionAt regionMap (mapSize world) p
         
-        scale = fromIntegral distance / fromIntegral (regionDistance graph)
         colour | region >= 0 = (regionColour region)
                | otherwise   = red
-{-# INLINE graphColours #-}
+{-# INLINE regionColours #-}
 
 
 

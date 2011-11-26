@@ -15,6 +15,7 @@ module Ant.IO
 	, playerHill 
 	
 	, containsAnt
+    , containsDeadAnt
 	, containsHill
 	, containsFood
     )
@@ -83,6 +84,10 @@ playerHill _ _           = False
 containsAnt :: Content -> Bool
 containsAnt (Ant _) = True
 containsAnt _ 	  = False
+
+containsDeadAnt :: Content -> Bool
+containsDeadAnt (DeadAnt _) = True
+containsDeadAnt _     = False
 
 containsHill :: Content -> Bool
 containsHill (Hill _)  = True 

@@ -2,38 +2,60 @@
 
 module Ant.Graph 
 	( Graph
-	, createGraph
-	, neighborList
-	,  neighborList'
-	, neighborDistances
+	, grCreate
+	, grNeighbors
+	, grEdges
+	, grEdgeIndices
+    , grIndex
+    , grSize
+    , grRegions
+    , grEmpty
 	)
 where
 
-import Ant.Map
 import Ant.Point
-import Ant.GraphBuilder
+import Ant.RegionBuilder
 
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
 
-type Graph = V.Vector Region
+newtype Graph = Graph { unGr :: V.Vector Region }
 
-createGraph :: RegionGraph -> Graph
-createGraph = V.fromList . map snd . M.toList    
+grEmpty :: Graph 
+grEmpty = Graph (V.empty)
 
-neighborList :: RegionVector -> ContentGraph -> [(Region, Edge)]
-neighborList rc graph = map fromIndex (contentNeighbors' rc)
-    where fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
-{-# INLINE graphNeighbors #-}    
+grCreate :: RegionGraph -> Graph
+grCreate = Graph . V.fromList . map snd . M.toList    
+
+grNeighbors ::  Graph -> Region -> [(Region, Edge)]
+grNeighbors graph region = map fromIndex (neighbors' region)
+    where fromIndex (i, e) = (graph `grIndex` i, e)
+{-# INLINE grNeighbors #-}    
 	
 	
-neighborList' :: Region -> [(RegionIndex, Edge)]
-neighborList' = M.toList . regionNeighbors
-{-# INLINE graphNeighbors' #-}
-    
-neighborDistances :: RegionIndex -> RegionVector -> [(Distance, RegionIndex)]
-neighborDistances i graph = (map toDistancePair . contentNeighbors') rc
+neighbors' :: Region -> [(RegionIndex, Edge)]
+neighbors' = M.toList . regionNeighbors
+{-# INLINE neighbors' #-}
+
+grEdges :: RegionIndex -> Graph -> [(RegionIndex, Edge)]
+grEdges i graph = neighbors' region
     where
-        rc = graph `V.unsafeIndex` i
-        toDistancePair (r, e) = (edgeDistance e, r)
-{-# INLINE neighborDistances #-}
+        region = graph `grIndex` i
+{-# INLINE grEdges #-}
+
+grEdgeIndices :: RegionIndex -> Graph -> [RegionIndex]
+grEdgeIndices i graph = map fst (grEdges i graph)
+{-# INLINE grEdgeIndices #-}
+
+
+grIndex :: Graph -> RegionIndex -> Region
+grIndex (Graph v) r = v V.! r --v `V.unsafeIndex` r
+{-# INLINE grIndex #-}
+  
+
+grSize :: Graph -> Int
+grSize (Graph v) = V.length v
+{-# INLINE grSize #-}
+
+grRegions :: Graph -> [Region]
+grRegions (Graph v) = V.toList v

@@ -17,58 +17,11 @@ import Text.Printf
 import qualified Data.IntMap as M
 import qualified Data.Vector.Unboxed as U
 
-createMap :: Map
-createMap = fromFunction (Size 40 40) f where
-    f (Point x y) | x > 4 && x < 36 && y > 4 && y < 36 = landSquare
-                  | otherwise = waterSquare
 
 smallMap :: Map
 smallMap = fromFunction (Size 40 40) f where
     f  = const landSquare   
 
-testState :: IO GameState
-testState = do
-    --scenario <- readScenario "maps/random_walk/random_walk_02p_01.map"
-    scenario <- readScenario "maps/maze/maze_08p_01.map"
-    --let scenario = smallMap
-    
-    --let scenario = tileMap scenario1 (Size 300 300)
-    
-    let graph  = emptyGraph (mapSize scenario) 100
-    
-    let (Size w h) = (mapSize scenario)
-    
-    let points = [Point x y | x <- [5, 10 .. w - 1], y <- [5, 10 .. h - 1]]
-    let graph' = foldr addRegion graph points
-  
-    
---    let (graph', r) = addRegion scenario graph (toIndex (mapSize scenario) (Point 24 11))
---    let (graph'', r) = addRegion scenario graph' (toIndex (mapSize scenario) (Point 66 41))
-    
-    
-    --print (map (\(p, d) -> fromIndex (mapSize scenario) p)  (M.toList (regionSquares r) ))
-
-    let allSquares = U.fromList [0.. w * h - 1]         
-    let pass = updatePassibility allSquares scenario (emptyPassibility (Size w h) pattern2)
-        
-    print (maxCost pass)
-        
-    print (mapSize scenario)
-    
-    --print (regionSquares r)
-           
-    let graphs = iterate (updateGraph pass scenario ) graph'
-    let final = graphs !! 10
-      
-    print (M.size (regions final))
-    print $ neighborsValid final
-        
-    return GameState
-        { gameSettings = defaultSettings
-        , gameMap      = scenario
-        , gameGraph    = final 
-        , gamePass     = pass
-        }
 
 time :: IO t -> IO t
 time a = do
@@ -153,10 +106,9 @@ renderInWindow win state = do
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
         --renderMap (worldColour world) start end
-        renderMap (graphColours world graph) start end    
-        renderGraph graph
-        
-        
+        renderMap (regionColours world (regionMap builder)) start end    
+        renderGraph (mapSize world) graph
+               
         {-let (Just r) = M.lookup 8 (regions graph)
     
         let visited = searchRegion (gamePass state) world (regionMap graph) r   
@@ -183,7 +135,7 @@ renderInWindow win state = do
     where
         world = gameMap state
         graph = gameGraph state
-        
+        builder = gameBuilder state
 
                
         

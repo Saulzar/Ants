@@ -4,6 +4,7 @@ module Ant.AntTask where
 
 import Ant.Point
 import Ant.IO
+import Ant.RegionBuilder
 
 import qualified Data.Set as S
 import Control.Monad
