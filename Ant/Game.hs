@@ -88,8 +88,6 @@ updateState content = do
     n <- gets (numRegions . gameGraph)
     when (n == 0) $ modifyGraph (initRegions content) 
     
-    traceShow n $ return ()
-    
     let world' = (updateContent content . updateVisibility vis) world
 
     pass <- gets gamePass 

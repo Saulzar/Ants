@@ -1,6 +1,13 @@
 {-# LANGUAGE PatternGuards #-}
 
-module Ant.RegionStats where
+module Ant.RegionStats 
+	( RegionContent (..)
+	, RegionStats (..)
+	, regionVisibility
+	, hillDistances
+	, regionStats
+	)
+	where
 
 import Data.List
 
@@ -8,6 +15,8 @@ import Ant.Map
 import Ant.Point
 import Ant.GraphBuilder
 import Ant.IO
+
+import Ant.Graph
 
 import qualified Data.Set as S
 import qualified Data.IntMap as M
@@ -21,56 +30,33 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
+import Data.Vector.Generic as G
 import qualified Data.PriorityQueue.FingerTree as Q
 
-type AntSet = S.Set AntTask
-type AntList = [(Point, Player)]
-
-type ContentGraph = V.Vector RegionContents
-
-data RegionContents = RegionContents
-    { rcAnts       :: AntList
-    , rcNearAnts   :: AntList
-    , rcFood   :: [Point]
-    , rcHills  :: [(Point, Player)]
-    
-    , rcHillDistance :: Int
-    , rcRegion :: Region
+data RegionContent = RegionContent
+    { rcAnts       	:: AntList
+    , rcNearAnts   	:: AntList
+    , rcFood   		:: [Point]
+    , rcHills  		:: [(Point, Player)]
+	, rcDeadAnts	:: [(Point, Player)]
     }
+
 	
-addContent :: RegionContents -> SquareContent -> RegionContents
+addContent :: RegionContent -> SquareContent -> RegionContent
 addContent rc (p, Ant n)    = rc { rcAnts    = (p, n) : rcAnts rc }
+addContent rc (p, DeadAnt n)    = rc { rcDeadAnts  = (p, n) : rcDeadAnts rc }
 addContent rc (p, Hill n)   = rc { rcHills = (p, n) : rcHills rc }
 addContent rc (p, Food)     = rc { rcFood  = p : rcFood rc }
 addContent rc _             = rc
      
-emptyContents region = RegionContents
+emptyContent = RegionContent
 		{ rcAnts 	= []
+		, rcDeadAnts = []
 		, rcFood 	= []
 		, rcHills 	= []
         , rcNearAnts = []
-        , rcHillDistance = 1000
-		, rcRegion	 = region
 		}
 		
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard
-        
-data AntTask = AntTask
-    { antTask  :: !Task
-    , antPos   :: !Point
-    }
-	
-instance Eq AntTask where
-    (==) a b = (antPos a == antPos b)
-    
-instance Ord AntTask where
-    compare a b = antPos a `compare` antPos b
-	
-makeAnt :: SquareContent -> AntTask
-makeAnt (p, _) = AntTask 
-	{ antTask = Unassigned
-	, antPos   = p
-	}
 
 regionVisibility :: Int -> RegionMap -> U.Vector Bool -> U.Vector Int
 regionVisibility numRegions regionMap visible = runST countVisible
@@ -85,33 +71,10 @@ regionVisibility numRegions regionMap visible = runST countVisible
                 
             U.unsafeFreeze v
 
-updateRegionVisible :: Int -> Region -> Region
-updateRegionVisible numVisible region | visible   = region { regionLastSeen = 0 }
-									  | otherwise = region { regionLastSeen = (regionLastSeen region) + 1 } 
-	where visible = (regionSize region * 100 `div` numVisible) > 80
-
-antSet :: [SquareContent] -> AntSet
-antSet = S.fromList . map makeAnt . filter (playerAnt 0 . snd) 
-	
-    
-
-contentNeighbors :: RegionContents -> ContentGraph -> [(RegionContents, Edge)]
-contentNeighbors rc graph = map fromIndex (contentNeighbors' rc)
-    where fromIndex (i, e) = (graph `V.unsafeIndex` i, e)
-    
-contentNeighbors' :: RegionContents -> [(RegionIndex, Edge)]
-contentNeighbors' = M.toList . regionNeighbors . rcRegion
-    
-neighborDistances :: RegionIndex -> V.Vector RegionContents -> [(Distance, RegionIndex)]
-neighborDistances i graph = (map toDistancePair . contentNeighbors') rc
-    where
-        rc = graph `V.unsafeIndex` i
-        toDistancePair (r, e) = (edgeDistance e, r)
-
 	
 type Queue = Q.PQueue Distance RegionIndex 	
 	
-hillDistances :: ContentGraph -> [RegionIndex] -> U.Vector Int
+hillDistances :: Graph -> [RegionIndex] -> U.Vector Int
 hillDistances contents hills = runST searchHills where 	
     initialQueue = Q.fromList (zip [0..] hills)
         
@@ -137,18 +100,14 @@ hillDistances contents hills = runST searchHills where
                 d'' <- UM.unsafeRead v r'
                 return (d + d' < d'')
                 
-			
 
-regionStats :: U.Vector Int -> RegionGraph -> [SquareContent] -> GraphBuilder -> ContentGraph
-regionStats visibility regionGraph content builder = runST regionStats'
+
+regionContents :: Int -> [SquareContent] -> GraphBuilder -> V.Vector RegionContent
+regionContents numRegions content builder = runST regionStats'
     where 
         regionStats' :: ST s (V.Vector RegionContents)
         regionStats' = do
-            v <- VM.new (M.size regionGraph)
-
-            forM_ (M.toList regionGraph) $ \(i, r) -> do
-                let r' = updateRegionVisible (visibility `U.unsafeIndex` i) r 
-                VM.unsafeWrite v i (emptyContents r')
+            v <- VM.replicate (M.size regionGraph) emptyContent
                 
             forM_ content $ \(p, c) -> do
                 let i = builder `regionAt` p
@@ -157,4 +116,32 @@ regionStats visibility regionGraph content builder = runST regionStats'
                 VM.unsafeWrite v i (rc `addContent` (p, c))
                 
             V.unsafeFreeze v
-			
+	
+
+data RegionStats = RegionStats
+	{ rsLastVisible 	:: !Int
+	, rsHillDistance 	:: !Int
+	, rsContent			:: !RegionContents
+
+	, rsOurDead		:: !Int
+	, rsEnemyDead	:: !Int
+	}
+	
+
+regionStats :: U.Vector Int -> U.Vector Int -> V.Vector RegionContent -> GaphVector -> V.Vector RegionStats -> V.Vector RegionStats
+regionStats = G.zipWith5 regionStats' where
+	
+	regionStats' visibility hillDistance content region stats = stats
+		{ rsLastVisible  = lastVisible stats + visible
+		, rsHillDistance =  hillDistance
+		, rsContent 	 = content
+
+		, rsOurDead		 = rsOurDead stats + length ourDead
+		, rsEnemyDead  	 = rsEnemyDead stats + length enemyDead
+		
+		}
+		where visible | (regionSize region * 100 `div` numVisible) > 80 = 1
+					  | otherwise 										= 0
+			  
+			  (ourDead, enemyDead) = partition ( (== 0) . snd ) (rcDeadAnts content)
+

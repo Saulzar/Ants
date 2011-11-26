@@ -103,7 +103,7 @@ data Region = Region
      ,  regionId      :: !RegionIndex
      ,  regionNeighbors :: !EdgeMap
      ,  regionSize      :: !Int
-	 ,  regionLastSeen  :: !Int
+	 ,  regionFrontier  :: !Bool
      } deriving Show
 
      
@@ -180,7 +180,6 @@ addRegion centre graph = graph
                 , regionCentre  = centre
                 , regionNeighbors = M.empty
                 , regionSize      = 0
-				, regionLastSeen  = 0
                 }
              
 
@@ -292,7 +291,12 @@ expandRegion pass world graph region = open' `seq` graph
               | otherwise = S.delete (regionId region) set
            where set = foldr S.insert (openRegions graph) (filter (/= invalidRegion) changedRegions)
 
-        region' = region { regionNeighbors = regionNeighbors', regionSize = M.size visited }
+        region' = region 
+			{ regionNeighbors 	= regionNeighbors'
+			, regionSize 		= M.size visited 
+			, regionFronteir 	= unseen
+			}
+			
         regions' = M.insert (regionId region) region' (regions graph)
 
         --updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
