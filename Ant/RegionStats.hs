@@ -127,15 +127,13 @@ growRegions numRegions v = growRegions' newRegions
 	
 
 updateFightRecords :: V.Vector RegionStats -> U.Vector (Int, Int) -> U.Vector (Int, Int)
-updateFightRecords regionStats frVec = frVec--U.modify update frVec where
-{-    update v = do	
+updateFightRecords regionStats frVec = U.modify update frVec where
+    update v = do
     	V.forM_ regionStats $ \stats -> case (rsEnemyPlayer stats) of
     		Nothing 		-> return ()
     		(Just player)	-> do
     			fr <- readU v player
-    			writeU v player (addFightRecord fr (rsDead stats))
--}
-		 
+    			writeU v player (addFightRecord fr (rsDead stats))	 
 
 updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
 updateStats world graph regionMap vis content stats = stats
@@ -180,12 +178,16 @@ regionVisibility numRegions regionMap visible = runST countVisible
 	where
         countVisible :: ST s (U.Vector Int)
         countVisible = do
+                        
             v <- UM.replicate numRegions 0
-{-            forM_ [0.. U.length regionMap - 1] $ \i -> when (visible `indexU` i) $ do
+            forM_ [0.. U.length regionMap - 1] $ \i -> when (visible `indexU` i) $ do
                 let (region, _) = regionMap `indexU` i 
-                n <- readU v region
-                writeU v i (n + 1)
-  -}              
+                return ()
+                {-
+                when (region /= invalidRegion) $ do           
+                    n <- readU v region
+                    writeU v i (n + 1)   
+                    -}
             U.unsafeFreeze v
 
 	
@@ -206,15 +208,16 @@ hillDistances graph hills = runST searchHills where
         v <- UM.replicate (grSize graph) 1000  
         forM_ hills $ \r -> UM.unsafeWrite v r 0
         
---        searchHills' v initialQueue
+        searchHills' v initialQueue
         U.unsafeFreeze v
     
     searchHills' v queue | Nothing 				  <- view = return ()	
-                         | Just ((d, r), queue') <- view = do
+                         | Just ((d, r), queue')  <- view = do
             
             successors <- filterM (isSuccessor d) (edgeDistances r graph)
+            --traceShow successors $ return ()
             forM_ successors $ \(d', r') -> writeU v r' (d + d')
-            searchHills' v (foldr (uncurry Q.insert) queue successors)
+            searchHills' v (foldr (uncurry Q.insert) queue' successors)
                                      
         where
             view = Q.minViewWithKey queue  
@@ -254,9 +257,9 @@ regionContent' worldSize numRegions regionMap content = runST regionStats'
                 
             forM_ content $ \(p, c) -> do
                 let i = regionAt regionMap worldSize p
-
-                rc <- traceShow i $ readV v i 
-                writeV v i (rc `addContent` (p, c))
+                when (i /= invalidRegion) $ do
+                    rc <- readV v i 
+                    writeV v i (rc `addContent` (p, c))
                 
             V.unsafeFreeze v
 	

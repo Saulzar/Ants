@@ -303,12 +303,12 @@ expandRegion pass world builder region = open' `seq` builder
         --updateNeighbor' = updateNeighbor (regionId region) regionNeighbors'
         changedNeighbors = map fst $ M.toList (M.union (regionNeighbors region) regionNeighbors') 
 
-{-        
+   
 writeSquares :: RegionIndex -> [Sq] -> RegionMap ->  RegionMap
 writeSquares r squares regionMap = U.modify update regionMap 
     where update v = forM_ squares $ \(p, d) -> UM.unsafeWrite v p (r, d)
--}
-    
+
+{-    
 writeSquares :: RegionIndex -> [Sq] -> RegionMap ->  RegionMap
 writeSquares r squares regionMap = runST update where
  
@@ -317,7 +317,7 @@ writeSquares r squares regionMap = runST update where
         v <- U.unsafeThaw regionMap
         forM_ squares $ \(p, d) -> UM.unsafeWrite v p (r, d)
         U.unsafeFreeze v
-    
+  -}  
     
 data SearchState = SearchState
     { visitedSquares :: !Set

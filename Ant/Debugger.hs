@@ -46,6 +46,7 @@ main = do
     print settings
     
     state <- runGame (initialState settings) 
+    print (gameStats state)
 
     initGUI
     window <- windowNew
