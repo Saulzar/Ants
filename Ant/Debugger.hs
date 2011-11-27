@@ -107,8 +107,10 @@ renderInWindow win state = do
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
         --renderMap (worldColour world) start end
-        renderMap (regionColours world (regionMap builder)) start end    
-        renderGraph (mapSize world) graph
+        --renderMap (regionColours world (regionMap builder)) start end    
+        --renderGraph (mapSize world) graph
+
+        renderMap (regionColours' fDist' world (regionMap builder)) start end 
                
         {-let (Just r) = M.lookup 8 (regions graph)
     
@@ -125,7 +127,7 @@ renderInWindow win state = do
         -}
         
         --renderMap (passColours world (gamePass state)) start end
-        --renderContent world start end 
+        renderContent world start end 
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)
@@ -137,6 +139,10 @@ renderInWindow win state = do
         world = gameMap state
         graph = gameGraph state
         builder = gameBuilder state
+        stats    = gameStats state
+
+        fDist' r = (fromIntegral d / 120.0) where
+            d = rsHillDistance (gsRegions stats `indexV` r)
 
                
         

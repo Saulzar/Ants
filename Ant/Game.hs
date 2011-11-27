@@ -31,6 +31,7 @@ import Ant.RegionBuilder
 import Ant.Passibility
 import Ant.RegionStats
 import Ant.Graph
+import Ant.Scheduler
 
 import System.Random
 import Debug.Trace
@@ -108,10 +109,10 @@ updateState content = do
     let graph = grCreate (regions builder')
     let stats' = updateStats world' graph (regionMap builder') vis content stats
 
-    liftIO $ print stats'
+     -- liftIO $ print stats'
 
 
-    modify $ \gameState -> gameState 
+    stats `seq` modify $ \gameState -> gameState 
         { gameMap = world'
         , gamePass = pass'
         , gameBuilder = builder'

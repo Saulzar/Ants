@@ -220,7 +220,7 @@ neighborSquares size visited  = (S.fromList . concatMap neighbors) (M.toList vis
 
 
 makeEdges :: Size -> Region -> M.IntMap Int -> RegionGraph -> EdgeMap
-makeEdges size region conn regions = M.mapWithKey edge conn 
+makeEdges size region conn regions =  M.mapWithKey edge conn 
     where edge i c = Edge 
             { edgeDistance = manhatten size (regionCentre region) (regionCentre region')
             , edgeConnectivity = c

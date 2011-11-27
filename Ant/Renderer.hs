@@ -206,6 +206,19 @@ regionColours world regionMap p = mapColours world colour p
 
 
 
+regionColours' :: (RegionIndex -> Double) -> Map -> RegionMap -> Point -> Colour Double
+regionColours' lookupColor world regionMap p = mapColours world colour p  
+     where                    
+        region = regionAt regionMap (mapSize world) p
+        intensity = lookupColor region
+
+        colour | region >= 0 = (sRGB intensity intensity intensity)
+               | otherwise   = red
+{-# INLINE regionColours' #-}
+
+
+
+
 passColours :: Map -> Passibility -> Point -> Colour Double
 passColours world pass p =  mapColours world colour p  
      where                   

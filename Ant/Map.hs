@@ -154,7 +154,7 @@ difference (Size width height) (Point x1 y1) (Point x2 y2) = Size dx dy
 {-# INLINE difference #-}       
         
 manhatten :: Size -> Point -> Point -> Int
-manhatten size p1 p2 | (Size dx dy) <- difference size p2 p2 = dx  + dy        
+manhatten size p1 p2 | (Size dx dy) <- difference size p1 p2 = dx  + dy        
 {-# INLINE manhatten #-}       
     
 manhattenIndex :: Size -> Int -> Int -> Int

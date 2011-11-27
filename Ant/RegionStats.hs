@@ -8,6 +8,9 @@ module Ant.RegionStats
 	, hillDistances
     , initialStats
     , updateStats
+
+    , indexV
+    , indexU
 	)
 	where
 
@@ -20,7 +23,6 @@ import Ant.IO
 import Ant.Square
 
 import Ant.Graph
-import Ant.AntTask
 
 import qualified Data.Set as S
 import qualified Data.IntMap as M
@@ -60,6 +62,8 @@ readU = UM.read
 writeU = UM.write
 {-# INLINE writeU #-}
 
+type AntList = [(Point, Player)]
+
 data RegionContent = RegionContent
     { rcAnts       	:: AntList
     , rcNearAnts   	:: AntList
@@ -68,7 +72,6 @@ data RegionContent = RegionContent
 	, rcDeadAnts	:: [(Point, Player)]
     } deriving Show
 	
-
 	
 data RegionStats = RegionStats
 	{ rsLastVisible 	:: !Int
@@ -133,7 +136,7 @@ updateFightRecords regionStats frVec = U.modify update frVec where
     		Nothing 		-> return ()
     		(Just player)	-> do
     			fr <- readU v player
-    			writeU v player (addFightRecord fr (rsDead stats))	 
+    			writeU v player (fr `addFightRecord` rsDead stats)	 
 
 updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
 updateStats world graph regionMap vis content stats = stats
@@ -182,21 +185,18 @@ regionVisibility numRegions regionMap visible = runST countVisible
             v <- UM.replicate numRegions 0
             forM_ [0.. U.length regionMap - 1] $ \i -> when (visible `indexU` i) $ do
                 let (region, _) = regionMap `indexU` i 
-                return ()
-                {-
                 when (region /= invalidRegion) $ do           
                     n <- readU v region
-                    writeU v i (n + 1)   
-                    -}
+                    writeU v region (n + 1)   
             U.unsafeFreeze v
 
 	
 type Queue = Q.PQueue Distance RegionIndex 	
 	
-edgeDistances :: RegionIndex -> Graph -> [(Distance, RegionIndex)]
-edgeDistances i graph = map toDistancePair (grEdges i graph)
+edgeDistances :: Int -> RegionIndex -> Graph -> [(Distance, RegionIndex)]
+edgeDistances d i graph = map toDistancePair (grEdges i graph)
     where
-        toDistancePair (r, e) = (edgeDistance e, r)
+        toDistancePair (r, e) = (edgeDistance e + d, r)
 {-# INLINE edgeDistances #-}
 
 hillDistances :: Graph -> [RegionIndex] -> U.Vector Int
@@ -214,17 +214,16 @@ hillDistances graph hills = runST searchHills where
     searchHills' v queue | Nothing 				  <- view = return ()	
                          | Just ((d, r), queue')  <- view = do
             
-            successors <- filterM (isSuccessor d) (edgeDistances r graph)
-            --traceShow successors $ return ()
-            forM_ successors $ \(d', r') -> writeU v r' (d + d')
+            successors <- filterM (isSuccessor d) (edgeDistances d r graph)
+            forM_ successors $ \(d', r') -> writeU v r' d'
             searchHills' v (foldr (uncurry Q.insert) queue' successors)
                                      
-        where
+        where 
             view = Q.minViewWithKey queue  
             
             isSuccessor d (d', r') = do
                 d'' <- readU v r'
-                return (d + d' < d'')
+                return (d' < d'')
                
 nearRadius :: Int                
 nearRadius = 16

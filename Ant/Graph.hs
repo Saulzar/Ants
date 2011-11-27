@@ -2,6 +2,7 @@
 
 module Ant.Graph 
 	( Graph
+
 	, grCreate
 	, grNeighbors
 	, grEdges
