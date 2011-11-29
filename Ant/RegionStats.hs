@@ -207,7 +207,7 @@ edgeDistances d i graph = map toDistancePair (grEdges i graph)
 
 hillDistances :: Graph -> [RegionIndex] -> U.Vector Int
 hillDistances graph hills = runST searchHills where 	
-    initialQueue = Q.fromList (zip [0..] hills)
+    initialQueue = Q.fromList (zip (repeat 0) hills)
         
     searchHills :: ST s (U.Vector Int)
     searchHills = do

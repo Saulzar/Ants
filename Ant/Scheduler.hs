@@ -48,21 +48,20 @@ freeAnts :: [Point] -> Scheduler [Point]
 freeAnts = filterM freeAnt
 {-# INLINE freeAnts #-}  
 
+
+type Queue = Q.PQueue Distance RegionIndex  
+
+
 data SearchNode = SearchNode 
     { snRegion :: !RegionIndex
     , snPred :: !RegionIndex
     , snDistance :: !Distance
-    , snPredDistance :: !Distance 
     }
 
 data Search = Search
-    { sOpen    :: [SearchNode]
-    , sVisited :: S.IntSet 
+    { sOpen    :: Queue
+    , sVisited :: M.Map Int SearchNode
     }
-
-nubRegions :: [SearchNode] -> [SearchNode]
-nubRegions = map snd . M.toList . M.fromListWith minDist . map (\sn -> (snRegion sn, sn))
-    where minDist sn sn' = if (snDistance sn) < (snDistance sn') then sn else sn'
 
 
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
@@ -76,7 +75,7 @@ stepSearch :: Search -> Int -> Graph -> Search
 stepSearch (Search open visited) maxDistance graph = Search open' visited' where
     open'     = nubRegions (filter (not . (flip S.member visited) . snRegion) neighbors)
     visited'  = foldr (S.insert . snRegion) visited open'
-    neighbors = filter ( (< maxDistance) . snDistance) $ concatMap (edgeDistances graph) open
+    neighbors = filter ( (< maxDistance) . snDistance) $ edgeDistances graph node
 
 openSearch :: Search -> Bool
 openSearch = not . null . sOpen 
@@ -115,4 +114,37 @@ findFreeAnts region maxDistance numAnts =  do
                         && openSearch search
                     
 
+
+
     
+edgeDistances :: Int -> RegionIndex -> Graph -> [(Distance, RegionIndex)]
+edgeDistances d i graph = map toDistancePair (grEdges i graph)
+    where
+        toDistancePair (r, e) = (edgeDistance e + d, r)
+{-# INLINE edgeDistances #-}
+
+hillDistances :: Graph -> [RegionIndex] -> U.Vector Int
+hillDistances graph region = runST searchHills where     
+    initialQueue = Q.fromList (zip [0..] hills)
+        
+    searchHills :: ST s (U.Vector Int)
+    searchHills = do
+        v <- UM.replicate (grSize graph) 1000  
+        forM_ hills $ \r -> UM.unsafeWrite v r 0
+        
+        searchHills' v initialQueue
+        U.unsafeFreeze v
+     
+    searchHills' v queue | Nothing                <- view = return ()   
+                         | Just ((d, r), queue')  <- view = do
+            
+            successors <- filterM (isSuccessor d) (edgeDistances d r graph)
+            forM_ successors $ \(d', r') -> writeU v r' d'
+            searchHills' v (foldr (uncurry Q.insert) queue' successors)
+                                     
+        where 
+            view = Q.minViewWithKey queue  
+            
+            isSuccessor d (d', r') = do
+                d'' <- readU v r'
+                return (d' < d'')
