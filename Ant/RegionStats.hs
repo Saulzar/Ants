@@ -312,7 +312,7 @@ regionStats visVec distVec contVec graph statsVec = V.generate (V.length statsVe
             (ourDead, enemyDead) = splitEnemy (rcDeadAnts content)
             (ourAntsNear, enemyAntsNear) = splitEnemy (rcAnts content ++ rcNearAnts content)
 
-            (ourAnts, enemyAnts) = splitEnemy rcAnts content
+            (ourAnts, enemyAnts) = splitEnemy (rcAnts content)
 
             dead = (length enemyDead, length ourDead)
 

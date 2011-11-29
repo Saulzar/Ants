@@ -48,73 +48,71 @@ freeAnts :: [Point] -> Scheduler [Point]
 freeAnts = filterM freeAnt
 {-# INLINE freeAnts #-}  
 
+data SearchNode = SearchNode 
+    { snRegion :: !RegionIndex
+    , snPred :: !RegionIndex
+    , snDistance :: !Distance
+    , snPredDistance :: !Distance 
+    }
 
 data Search = Search
-    { sOpen    :: [(RegionIndex, Distance)]
+    { sOpen    :: [SearchNode]
     , sVisited :: S.IntSet 
     }
 
-nubRegions :: [(RegionIndex, Distance)] -> [(RegionIndex, Distance)]
-nubRegions = M.toList . M.fromListWith min 
+nubRegions :: [SearchNode] -> [SearchNode]
+nubRegions = map snd . M.toList . M.fromListWith minDist . map (\sn -> (snRegion sn, sn))
+    where minDist sn sn' = if (snDistance sn) < (snDistance sn') then sn else sn'
 
 
-edgeDistances :: Graph -> (RegionIndex, Distance) -> [(RegionIndex, Distance)]
-edgeDistances graph (r, d) = map toDistancePair (grEdges r graph)
+edgeDistances :: Graph -> SearchNode -> [SearchNode]
+edgeDistances graph (SearchNode r _ d ) = map toNode (grEdges r graph)
     where
-        toDistancePair (r', e) = (r', edgeDistance e + d)
+        toNode (r', e) = SearchNode r' r (edgeDistance e + d)
 {-# INLINE edgeDistances #-}
 
 
-stepSearch :: Graph -> Search -> Search
-stepSearch graph (SearchData open visited) = SearchData open' visited' where
-    open'     = nubRegions (filter (not . (flip S.member visited) . fst) neighbors)
-    visited'  = foldr (S.insert . fst) visited open'
-    neighbors = concatMap (edgeDistances graph) open
+stepSearch :: Search -> Int -> Graph -> Search
+stepSearch (Search open visited) maxDistance graph = Search open' visited' where
+    open'     = nubRegions (filter (not . (flip S.member visited) . snRegion) neighbors)
+    visited'  = foldr (S.insert . snRegion) visited open'
+    neighbors = filter ( (< maxDistance) . snDistance) $ concatMap (edgeDistances graph) open
 
-closedSearch :: Search -> Bool
-closedSearch = not . null . sOpen 
+openSearch :: Search -> Bool
+openSearch = not . null . sOpen 
 
 
 initSearch :: RegionIndex -> Search
-initSearch r = Search [(r, 0)] (S.singleton r)
+initSearch r = Search [SearchNode r r 0 0] (S.singleton r)
 
-
-visitedRegions :: Search -> [RegionStats]
-visitedRegions = map fst . sVisited
-
-countAnts :: GameStats -> SearchData -> Int
-countAnts stats  = sum . map (fst . rsAntCount . indexV regionStats) . visitedRegions
-    where regionStats gsRegions stats
-
-getAnts :: GameState -> [RegionStats] -> [Point]
-getAnts stats = concatMap (rcOurAnts . rsContent . indexV regionStats) . visitedRegions
-
-findAnts :: GameStats -> Graph -> RegionIndex -> Int -> Int -> [Point]
-findAnts stats graph region maxDistance numAnts = getAnts stats regions
-    where
-        search = zip [0..] $ iterate (stepSearch graph) (initSearch region)
-        regions = visitedRegions . head . (dropWhile satisfied) $ search
-
-        satisfied (n, s) = (countAnts stats s < numAnts) 
-                        && openSearch s 
-                        && n < maxDistance
-
+getAnts :: [SearchNode] -> GameStats -> [(Point, RegionIndex)]
+getAnts regions stats = concatMap () regions
+     antDistances (SearchNode r r' _) = map (p -> ((p, r'),   (allAnts r)
+     
+     allAnts = rcOurAnts . rsContent . indexV (gsRegions stats)
 
 findFreeAnts :: RegionIndex -> Int -> Int -> Scheduler [Point]
-findFreeAnts region maxDistance numAnts = do
+findFreeAnts region maxDistance numAnts =  do 
+    ants <- findFree' (initSearch region) [] 
+    --return $ (take numAnts . sortBy (compare `on` 
+    return ants
     
-    search <- findFree' (initSearch region) 0 0 
-
-    where
+    where    
     
-        findFree' search n d = do
-            
-
-
-            search
-                             
-
-
-
+        findFree' search found | finished = return found
+                               | otherwise = do
+                                   
+            let open = map snRegion (sOpen search)
+        
+            ants <- asks $ (getAnts open) . cStats
+            found' <- liftM (++ found) (freeAnts ants)
+         
+            search' <- asks $ (stepSearch search maxDistance) . cGraph
+            findFree' search' found'
+                 
+            where 
+                finished = length found < numAnts 
+                        && openSearch search
+                    
 
     
