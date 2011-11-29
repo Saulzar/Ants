@@ -2,6 +2,7 @@
 
 module Ant.RegionStats 
 	( RegionContent (..)
+    , rcOurAnts
 	, RegionStats (..)
     , GameStats (..)
 	, regionVisibility
@@ -71,7 +72,9 @@ data RegionContent = RegionContent
     , rcHills  		:: [(Point, Player)]
 	, rcDeadAnts	:: [(Point, Player)]
     } deriving Show
-	
+
+rcOurAnts :: RegionContent -> [Point]
+rcOurAnts = map fst . filter ((== 0) . snd) . rcAnts
 	
 data RegionStats = RegionStats
 	{ rsLastVisible 	:: !Int
@@ -80,6 +83,9 @@ data RegionStats = RegionStats
 
 	, rsDead		:: !(Int, Int)
 	, rsFightRecord :: !(Int, Int)
+
+    , rsAntCount        :: (Int, Int)
+    , rsNearAntCount    :: (Int, Int)
 
 	, rsEnemyPlayer :: Maybe Player  -- The main opponent here
 	} deriving Show
@@ -210,7 +216,7 @@ hillDistances graph hills = runST searchHills where
         
         searchHills' v initialQueue
         U.unsafeFreeze v
-    
+     
     searchHills' v queue | Nothing 				  <- view = return ()	
                          | Just ((d, r), queue')  <- view = do
             
@@ -289,6 +295,9 @@ regionStats visVec distVec contVec graph statsVec = V.generate (V.length statsVe
 		, rsDead		 = dead
 		, rsFightRecord	 = addFightRecord dead (rsFightRecord stats)
 
+        , rsAntCount     = (length ourAnts, length enemyAnts)
+        , rsNearAntCount = (length enemyAntsNear, length enemyAntsNear)
+
 		, rsEnemyPlayer  = maxPlayer (enemyDead ++ enemyAnts)
 		
 		}
@@ -301,7 +310,9 @@ regionStats visVec distVec contVec graph statsVec = V.generate (V.length statsVe
             splitEnemy = partition ( (== 0) . snd )
 
             (ourDead, enemyDead) = splitEnemy (rcDeadAnts content)
-            (ourAnts, enemyAnts) = splitEnemy (rcAnts content ++ rcNearAnts content)
+            (ourAntsNear, enemyAntsNear) = splitEnemy (rcAnts content ++ rcNearAnts content)
+
+            (ourAnts, enemyAnts) = splitEnemy rcAnts content
 
             dead = (length enemyDead, length ourDead)
 

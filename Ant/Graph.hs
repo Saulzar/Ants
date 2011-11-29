@@ -53,7 +53,7 @@ grIndex :: Graph -> RegionIndex -> Region
 grIndex (Graph v) r = v V.! r --v `V.unsafeIndex` r
 {-# INLINE grIndex #-}
   
-
+ 
 grSize :: Graph -> Int
 grSize (Graph v) = V.length v
 {-# INLINE grSize #-}

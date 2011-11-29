@@ -215,9 +215,19 @@ findChanges regions = unzip . catMaybes . map lessSq . M.toList where
 neighborSquares :: Size -> Set -> PointSet
 neighborSquares size visited  = (S.fromList . concatMap neighbors) (M.toList visited) 
     where 
-        neighbors (p, _) = filter (\p' -> M.notMember p' visited) $ neighborIndices size p 
+        neighbors (p, _) = filterNeighbors size visited p
 
 
+filterNeighbors :: Size -> Set -> PointIndex -> [PointIndex]
+filterNeighbors size visited  = filter (\p' -> M.notMember p' visited) . neighborIndices size 
+
+{-
+neighborSquares :: Size -> Set -> PointSet
+neighborSquares size visited  = neighborSets !! 20  where
+
+    neighborSets = iterate neighbors' (edgeSquares size visited)
+    neighbors' =  S.fromList . concatMap (filterNeighbors size visited) . S.toList
+-}
 
 makeEdges :: Size -> Region -> M.IntMap Int -> RegionGraph -> EdgeMap
 makeEdges size region conn regions =  M.mapWithKey edge conn 

@@ -18,13 +18,13 @@ import Control.Monad.State.Strict
 
 type AntSet = M.Map Point Task
 
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard deriving Eq
 
  
 
 data Context = Context 
     { cWorld :: Map
-    , cStats :: RegionStats
+    , cStats :: GameStats
     , cGraph :: Graph
     }
 
@@ -48,25 +48,73 @@ freeAnts :: [Point] -> Scheduler [Point]
 freeAnts = filterM freeAnt
 {-# INLINE freeAnts #-}  
 
-data SearchData = SearchData
-    { sOpen    :: [RegionIndex]
+
+data Search = Search
+    { sOpen    :: [(RegionIndex, Distance)]
     , sVisited :: S.IntSet 
     }
 
-stepBFS :: Graph -> SearchData -> SearchData
-stepBFS graph (SearchData visted open) = SearchData open' visited' where
-    open'     = filter (not . S.member visited)
-    visited'  = foldr S.insert visited open'
-    neighbors = concatMap (flip grEdgeIndices graph) open
+nubRegions :: [(RegionIndex, Distance)] -> [(RegionIndex, Distance)]
+nubRegions = M.toList . M.fromListWith min 
 
-finishedBFS :: SearchData -> Bool
-finishedBFS (SearchData _ []) = True
-finishedBFS _                 = False
 
-initBFS :: RegionIndex -> SearchData
-initBFS r = SearchData [r] (S.singleton r)
+edgeDistances :: Graph -> (RegionIndex, Distance) -> [(RegionIndex, Distance)]
+edgeDistances graph (r, d) = map toDistancePair (grEdges r graph)
+    where
+        toDistancePair (r', e) = (r', edgeDistance e + d)
+{-# INLINE edgeDistances #-}
+
+
+stepSearch :: Graph -> Search -> Search
+stepSearch graph (SearchData open visited) = SearchData open' visited' where
+    open'     = nubRegions (filter (not . (flip S.member visited) . fst) neighbors)
+    visited'  = foldr (S.insert . fst) visited open'
+    neighbors = concatMap (edgeDistances graph) open
+
+closedSearch :: Search -> Bool
+closedSearch = not . null . sOpen 
+
+
+initSearch :: RegionIndex -> Search
+initSearch r = Search [(r, 0)] (S.singleton r)
+
+
+visitedRegions :: Search -> [RegionStats]
+visitedRegions = map fst . sVisited
+
+countAnts :: GameStats -> SearchData -> Int
+countAnts stats  = sum . map (fst . rsAntCount . indexV regionStats) . visitedRegions
+    where regionStats gsRegions stats
+
+getAnts :: GameState -> [RegionStats] -> [Point]
+getAnts stats = concatMap (rcOurAnts . rsContent . indexV regionStats) . visitedRegions
+
+findAnts :: GameStats -> Graph -> RegionIndex -> Int -> Int -> [Point]
+findAnts stats graph region maxDistance numAnts = getAnts stats regions
+    where
+        search = zip [0..] $ iterate (stepSearch graph) (initSearch region)
+        regions = visitedRegions . head . (dropWhile satisfied) $ search
+
+        satisfied (n, s) = (countAnts stats s < numAnts) 
+                        && openSearch s 
+                        && n < maxDistance
+
 
 findFreeAnts :: RegionIndex -> Int -> Int -> Scheduler [Point]
-findFreeAnts region maxDistance numAnts = 
+findFreeAnts region maxDistance numAnts = do
+    
+    search <- findFree' (initSearch region) 0 0 
 
-    find' 0 s = returnAnts 
+    where
+    
+        findFree' search n d = do
+            
+
+
+            search
+                             
+
+
+
+
+    

@@ -107,10 +107,10 @@ renderInWindow win state = do
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
         --renderMap (worldColour world) start end
-        --renderMap (regionColours world (regionMap builder)) start end    
-        --renderGraph (mapSize world) graph
+        renderMap (regionColours world (regionMap builder)) start end    
+        renderGraph (mapSize world) graph
 
-        renderMap (regionColours' fDist' world (regionMap builder)) start end 
+        --renderMap (regionColours' fDist' world (regionMap builder)) start end 
                
         {-let (Just r) = M.lookup 8 (regions graph)
     
