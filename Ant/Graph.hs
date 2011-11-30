@@ -29,11 +29,10 @@ import qualified Data.Vector as V
 
 import qualified Data.IntSet as S
 
-
-
+import Debug.Trace
 import Data.Maybe
 
-import Data.PSQueue ( :-> )
+import Data.PSQueue ( Binding(..) )
 import qualified Data.PSQueue as Q
 
 newtype Graph = Graph { unGr :: V.Vector Region }
@@ -78,14 +77,26 @@ grRegions :: Graph -> [Region]
 grRegions (Graph v) = V.toList v
 
 
-type Queue = Q.PQueue Distance SearchNode
+type Queue = Q.PSQ SearchNode Distance
 
 data SearchNode = SearchNode 
     { snRegion   :: !RegionIndex
     , snDistance :: !Distance
     , snPred     :: Maybe SearchNode
     }
+    
 
+instance Show SearchNode where
+    show (SearchNode r d _) = show r ++ " dist: " ++ show d
+
+    
+instance Eq SearchNode where
+    (==) sn sn' = snRegion sn == snRegion sn'
+    
+instance Ord SearchNode where
+    compare sn sn' = snRegion sn `compare` snRegion sn'
+    
+    
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
 edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
     where
@@ -118,17 +129,17 @@ grSearch metric graph r = search (S.singleton r) (Q.singleton node0 (metric node
         where toDistancePair (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
     {-# INLINE succ #-}
           
-    search seen queue  | Nothing                     <- view = []
-                       | Just (_ :-> node), queue')  <- view = next node seen queue'                    
+    search seen queue  | Nothing                      <- view = []
+                       | Just ((node :-> _), queue')  <- view = next node seen queue'                    
         where view = Q.minView queue  
         
     next node seen queue = node : (search seen' queue')
         where
-            queue'  = foldr insert queue' successors
+            queue'  = foldr insert queue successors
             seen'   = S.insert (snRegion node) seen
             
             successors = filter (flip S.notMember seen . snRegion) (succ node)
-            insert node = Q.insert (metric node) node
+            insert node = Q.insert node (metric node)
     {-# INLINE next #-}
             
             
@@ -146,7 +157,7 @@ grTest = Graph regions where
         }
         where
             (x, y) = n `divMod` size
-            inBounds (x, y) = x > 0 && y > 0 && x < size && y < size
+            inBounds (x, y) = x >= 0 && y >=  0 && x < size && y < size
             toEdge  (x, y)  = (y * size + x, Edge 1 1)
             neighbors       = map toEdge $ filter inBounds [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
             

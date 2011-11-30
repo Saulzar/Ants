@@ -83,7 +83,8 @@ Executable Debugger
       cairo >= 0.12.2,
       gtk   >= 0.12.2,
       colour >= 2.3,
-      fingertree >= 0.0.1
+      fingertree >= 0.0.1,
+      PSQueue >= 1.1
       
       
   ghc-options: -threaded -O1 -funbox-strict-fields 
