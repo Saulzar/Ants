@@ -115,7 +115,7 @@ grAStar :: Size -> RegionIndex -> Graph -> RegionIndex -> Maybe SearchNode
 grAStar worldSize dest graph r = listToMaybe $ dropWhile ( (/= dest) . snRegion ) nodes
     where 
         nodes  = grSearch metric graph r
-        metric (SearchNode r d _) = manhatten worldSize destCentre (centre r) + d
+        metric (SearchNode r d _) = (round . (*100) . sqrt . fromIntegral) $ distanceSq worldSize destCentre (centre r) + d
             
         centre r = regionCentre (graph `grIndex` r)
         destCentre  = centre dest
@@ -156,7 +156,7 @@ grTest = Graph regions where
         , regionFrontier  = False
         }
         where
-            (x, y) = n `divMod` size
+            (y, x) = n `divMod` size
             inBounds (x, y) = x >= 0 && y >=  0 && x < size && y < size
             toEdge  (x, y)  = (y * size + x, Edge 1 1)
             neighbors       = map toEdge $ filter inBounds [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
