@@ -109,6 +109,10 @@ initialRegionStats = RegionStats
 	, 	rsContent 		= emptyContent
     ,   rsDead          = (0, 0)
 	,   rsFightRecord 	= (0, 0)
+    
+    , rsAntCount        = (0, 0)
+    , rsNearAntCount    = (0, 0)    
+    
 	, 	rsEnemyPlayer   = Nothing 
 	}
 	
