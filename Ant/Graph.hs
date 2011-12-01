@@ -5,6 +5,7 @@ module Ant.Graph
 
 	, grCreate
 	, grNeighbors
+    , grEdge
 	, grEdges
 	, grEdgeIndices
     , grIndex
@@ -55,10 +56,14 @@ neighbors' :: Region -> [(RegionIndex, Edge)]
 neighbors' = M.toList . regionNeighbors
 {-# INLINE neighbors' #-}
 
+grEdge :: RegionIndex -> RegionIndex -> Graph -> Maybe Edge
+grEdge r r' graph = M.lookup r' (regionNeighbors region)
+    where region = graph `grIndex` r
+{-# INLINE grEdge #-}        
+        
 grEdges :: RegionIndex -> Graph -> [(RegionIndex, Edge)]
-grEdges i graph = neighbors' region
-    where
-        region = graph `grIndex` i
+grEdges r graph = neighbors' region
+    where  region = graph `grIndex` r
 {-# INLINE grEdges #-}
 
 grEdgeIndices :: RegionIndex -> Graph -> [RegionIndex]
@@ -100,8 +105,7 @@ instance Ord SearchNode where
     
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
 edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
-    where
-        toNode (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
+    where toNode (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
 {-# INLINE edgeDistances #-}
 
 grPath :: SearchNode -> [RegionIndex]
@@ -111,12 +115,12 @@ grPath sn = path sn [] where
 
 
 grBFS :: Graph -> RegionIndex -> [SearchNode]
-grBFS = grSearch snDistance
+grBFS graph = grSearch (grSuccDistance graph) snDistance
 
 grAStar :: Size -> Graph -> RegionIndex -> RegionIndex -> Maybe SearchNode
 grAStar worldSize graph source dest = listToMaybe $ dropWhile ( (/= dest) . snRegion ) nodes
     where 
-        nodes  = grSearch metric graph source
+        nodes  = grSearch (grSuccDistance graph) metric source
         
         metric :: SearchNode -> Float
         metric (SearchNode r d _) = fromIntegral d + (sqrt . fromIntegral $ distanceSq worldSize destCentre (centre r))
@@ -125,6 +129,15 @@ grAStar worldSize graph source dest = listToMaybe $ dropWhile ( (/= dest) . snRe
         centre r = regionCentre (graph `grIndex` r)      
         destCentre  = centre dest
         
+grSucc :: Graph -> (RegionIndex -> RegionIndex -> Edge -> Maybe Distance) -> SearchNode -> [SearchNode]
+grSucc graph distance node@(SearchNode r d _) = catMaybes . map  succ $ (grEdges r graph)
+    where succ (r', e) =  distance r r' e >>= \d' -> return $ SearchNode r' (d + d') (Just node)
+{-# INLINE grSucc #-}     
+    
+grSuccDistance :: Graph -> SearchNode -> [SearchNode]
+grSuccDistance graph = grSucc graph distance 
+    where distance _ _ e = Just (edgeDistance e)
+{-# INLINE grSuccDistance #-}            
         
 insertMin :: Ord a => SearchNode -> a -> Queue a -> Queue a
 insertMin node p = Q.alter alter node where
@@ -132,13 +145,9 @@ insertMin node p = Q.alter alter node where
     alter Nothing    = Just p
 {-# INLINE insertMin #-}
     
-grSearch :: Ord a => (SearchNode -> a) -> Graph -> RegionIndex -> [SearchNode]
-grSearch metric graph r = search (S.singleton r) (Q.singleton node0 (metric node0)) where
+grSearch :: Ord a => (SearchNode -> [SearchNode]) -> (SearchNode -> a) -> RegionIndex -> [SearchNode]
+grSearch succ metric r = search (S.singleton r) (Q.singleton node0 (metric node0)) where
     node0 = SearchNode r 0 Nothing
-
-    succ node@(SearchNode r d _) = map toDistancePair (grEdges r graph)
-        where toDistancePair (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
-    {-# INLINE succ #-}
           
     search seen queue  | Nothing                      <- view = []
                        | Just ((node :-> _), queue')  <- view = next node seen queue'                    
