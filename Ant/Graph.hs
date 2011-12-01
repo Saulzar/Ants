@@ -17,6 +17,8 @@ module Ant.Graph
     , grAStar
     , grSearch
     , grPath
+    
+    , grTest
 	)
 where
 
@@ -77,7 +79,7 @@ grRegions :: Graph -> [Region]
 grRegions (Graph v) = V.toList v
 
 
-type Queue = Q.PSQ SearchNode Distance
+type Queue a = Q.PSQ SearchNode a
 
 data SearchNode = SearchNode 
     { snRegion   :: !RegionIndex
@@ -85,7 +87,6 @@ data SearchNode = SearchNode
     , snPred     :: Maybe SearchNode
     }
     
-
 instance Show SearchNode where
     show (SearchNode r d _) = show r ++ " dist: " ++ show d
 
@@ -104,24 +105,34 @@ edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
 {-# INLINE edgeDistances #-}
 
 grPath :: SearchNode -> [RegionIndex]
-grPath (SearchNode r _ Nothing)  = [r]
-grPath (SearchNode r _ (Just p)) = r : grPath p
+grPath sn = path sn [] where
+    path (SearchNode r _ Nothing)  xs = r : xs
+    path (SearchNode r _ (Just p)) xs = path p (r : xs)
 
 
 grBFS :: Graph -> RegionIndex -> [SearchNode]
 grBFS = grSearch snDistance
 
-grAStar :: Size -> RegionIndex -> Graph -> RegionIndex -> Maybe SearchNode
-grAStar worldSize dest graph r = listToMaybe $ dropWhile ( (/= dest) . snRegion ) nodes
+grAStar :: Size -> Graph -> RegionIndex -> RegionIndex -> Maybe SearchNode
+grAStar worldSize graph source dest = listToMaybe $ dropWhile ( (/= dest) . snRegion ) nodes
     where 
-        nodes  = grSearch metric graph r
-        metric (SearchNode r d _) = (round . (*100) . sqrt . fromIntegral) $ distanceSq worldSize destCentre (centre r) + d
+        nodes  = grSearch metric graph source
+        
+        metric :: SearchNode -> Float
+        metric (SearchNode r d _) = fromIntegral d + (sqrt . fromIntegral $ distanceSq worldSize destCentre (centre r))
+        {-# INLINE metric #-}
             
-        centre r = regionCentre (graph `grIndex` r)
+        centre r = regionCentre (graph `grIndex` r)      
         destCentre  = centre dest
         
+        
+insertMin :: Ord a => SearchNode -> a -> Queue a -> Queue a
+insertMin node p = Q.alter alter node where
+    alter (Just p') = Just (min p p')
+    alter Nothing    = Just p
+{-# INLINE insertMin #-}
     
-grSearch :: (SearchNode -> Distance) -> Graph -> RegionIndex -> [SearchNode]
+grSearch :: Ord a => (SearchNode -> a) -> Graph -> RegionIndex -> [SearchNode]
 grSearch metric graph r = search (S.singleton r) (Q.singleton node0 (metric node0)) where
     node0 = SearchNode r 0 Nothing
 
@@ -139,26 +150,24 @@ grSearch metric graph r = search (S.singleton r) (Q.singleton node0 (metric node
             seen'   = S.insert (snRegion node) seen
             
             successors = filter (flip S.notMember seen . snRegion) (succ node)
-            insert node = Q.insert node (metric node)
-    {-# INLINE next #-}
+            insert node = insertMin node (metric node)
             
             
-grTest :: Graph
-grTest = Graph regions where
-    size = 10
+grTest :: Size -> Graph
+grTest (Size w h) =  Graph regions where
     
-    regions = V.fromList (map mkRegion [0.. size * size - 1])
+    regions = V.fromList (map mkRegion [0.. w * h - 1])
     mkRegion n = Region
         { regionCentre = Point x y
-        , regionId     = y * size + x
+        , regionId     = y * w + x
         , regionNeighbors = M.fromList neighbors
         , regionSize      = 0
         , regionFrontier  = False
         }
         where
-            (y, x) = n `divMod` size
-            inBounds (x, y) = x >= 0 && y >=  0 && x < size && y < size
-            toEdge  (x, y)  = (y * size + x, Edge 1 1)
+            (y, x) = n `divMod` w
+            inBounds (x, y) = x >= 0 && y >=  0 && x < w && y < h
+            toEdge  (x, y)  = (y * w + x, Edge 1 1)
             neighbors       = map toEdge $ filter inBounds [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
             
             

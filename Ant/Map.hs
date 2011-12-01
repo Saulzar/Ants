@@ -163,7 +163,7 @@ manhattenIndex size p1 p2 = manhatten size (fromIndex size p1) (fromIndex size p
 
 
 distanceSq :: Size -> Point -> Point -> Int
-distanceSq size p1 p2 | (Size dx dy) <- difference size p2 p2 = dx  + dy        
+distanceSq size p1 p2 | (Size dx dy) <- difference size p1 p2 = dx * dx  + dy * dy
 {-# INLINE distanceSq #-}      
     
 distanceSqIndex :: Size -> Int -> Int -> Int
