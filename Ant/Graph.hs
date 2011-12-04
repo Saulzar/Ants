@@ -1,13 +1,13 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Ant.Graph 
-	( Graph
-
-	, grCreate
-	, grNeighbors
+    ( Graph
+    
+    , grCreate
+    , grNeighbors
     , grEdge
-	, grEdges
-	, grEdgeIndices
+    , grEdges
+    , grEdgeIndices
     , grIndex
     , grSize
     , grRegions
@@ -16,8 +16,9 @@ module Ant.Graph
     , SearchNode(..)
     , grBFS
     , grAStar
-    , grSearch
     , grPath
+    
+    , grSucc
     
     , grTest
 	)
@@ -26,6 +27,8 @@ where
 import Ant.Point
 import Ant.RegionBuilder
 import Ant.Map
+import Ant.Search
+import Ant.Vector
 
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
@@ -35,8 +38,6 @@ import qualified Data.IntSet as S
 import Debug.Trace
 import Data.Maybe
 
-import Data.PSQueue ( Binding(..) )
-import qualified Data.PSQueue as Q
 
 newtype Graph = Graph { unGr :: V.Vector Region }
 
@@ -72,7 +73,7 @@ grEdgeIndices i graph = map fst (grEdges i graph)
 
 
 grIndex :: Graph -> RegionIndex -> Region
-grIndex (Graph v) r = v `V.unsafeIndex` r
+grIndex (Graph v) r = v `indexV` r
 {-# INLINE grIndex #-}
   
  
@@ -83,24 +84,6 @@ grSize (Graph v) = V.length v
 grRegions :: Graph -> [Region]
 grRegions (Graph v) = V.toList v
 
-
-type Queue a = Q.PSQ SearchNode a
-
-data SearchNode = SearchNode 
-    { snRegion   :: !RegionIndex
-    , snDistance :: !Distance
-    , snPred     :: Maybe SearchNode
-    }
-    
-instance Show SearchNode where
-    show (SearchNode r d _) = show r ++ " dist: " ++ show d
-
-    
-instance Eq SearchNode where
-    (==) sn sn' = snRegion sn == snRegion sn'
-    
-instance Ord SearchNode where
-    compare sn sn' = snRegion sn `compare` snRegion sn'
     
     
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
@@ -115,12 +98,12 @@ grPath sn = path sn [] where
 
 
 grBFS :: Graph -> RegionIndex -> [SearchNode]
-grBFS graph = grSearch (grSuccDistance graph) snDistance
+grBFS graph = search (grSuccDistance graph) snDistance
 
 grAStar :: Size -> Graph -> RegionIndex -> RegionIndex -> Maybe SearchNode
-grAStar worldSize graph source dest = listToMaybe $ dropWhile ( (/= dest) . snRegion ) nodes
+grAStar worldSize graph source dest = listToMaybe $ dropWhile ( (/= dest) . snKey ) nodes
     where 
-        nodes  = grSearch (grSuccDistance graph) metric source
+        nodes  = search (grSuccDistance graph) metric source
         
         metric :: SearchNode -> Float
         metric (SearchNode r d _) = fromIntegral d + (sqrt . fromIntegral $ distanceSq worldSize destCentre (centre r))
@@ -139,27 +122,6 @@ grSuccDistance graph = grSucc graph distance
     where distance _ _ e = Just (edgeDistance e)
 {-# INLINE grSuccDistance #-}            
         
-insertMin :: Ord a => SearchNode -> a -> Queue a -> Queue a
-insertMin node p = Q.alter alter node where
-    alter (Just p') = Just (min p p')
-    alter Nothing    = Just p
-{-# INLINE insertMin #-}
-    
-grSearch :: Ord a => (SearchNode -> [SearchNode]) -> (SearchNode -> a) -> RegionIndex -> [SearchNode]
-grSearch succ metric r = search (S.singleton r) (Q.singleton node0 (metric node0)) where
-    node0 = SearchNode r 0 Nothing
-          
-    search seen queue  | Nothing                      <- view = []
-                       | Just ((node :-> _), queue')  <- view = next node seen queue'                    
-        where view = Q.minView queue  
-        
-    next node seen queue = node : (search seen' queue')
-        where
-            queue'  = foldr insert queue successors
-            seen'   = S.insert (snRegion node) seen
-            
-            successors = filter (flip S.notMember seen . snRegion) (succ node)
-            insert node = insertMin node (metric node)
             
             
 grTest :: Size -> Graph

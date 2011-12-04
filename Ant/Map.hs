@@ -10,6 +10,8 @@ module Ant.Map
     
     , noVisibility
     , visibleSet
+    , influenceCount
+    , circlePoints
     
     , updateVisibility
     , updateContent
@@ -46,6 +48,8 @@ import qualified Data.Vector.Storable.Mutable as SM
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
+import Control.Monad
+
 import Control.Monad.ST
 import Control.Arrow 
 
@@ -56,6 +60,7 @@ import Data.List.Split
 import Ant.Point
 import Ant.Square
 import Ant.IO
+import Ant.Vector
 
 data Map = Map { mapSquares :: S.Vector Square 
                , mapSize    :: !Size
@@ -88,19 +93,41 @@ fromFunction size@(Size x y) f = Map (S.generate (area size) (\i -> let (sx, sy)
 noVisibility :: Size -> U.Vector Bool
 noVisibility size = (U.replicate (area size) False)
 
-visibleSet :: Size -> Int -> [Point] -> U.Vector Bool
-visibleSet size radiusSq ants = runST $ do
-        v <- UM.replicate (area size) False
-        
-        flip mapM_ ants  $ \ant ->
-           flip mapM_ offsets $ \offset -> do
-               UM.unsafeWrite v (wrapIndex size (ant `addSize` offset)) True
-         
-        U.unsafeFreeze v
-    where
-        offsets = [Size x y | x <- [-radius..radius], y <- [-radius..radius],  x * x + y * y <= radiusSq]
-        radius = ceiling (sqrt (fromIntegral radiusSq))
 
+influenceCount :: Size -> Int -> [Point] -> U.Vector Int
+influenceCount size radiusSq ants = U.create $ do
+    v <- UM.replicate (area size) 0
+    
+    mapOffsets radiusSq ants $ \ant offset -> do
+       let i = wrapIndex size (ant `addSize` offset)
+        
+       n <- UM.unsafeRead v i
+       UM.unsafeWrite v i (n + 1)
+     
+    return v
+                
+circlePoints :: Int -> [Size]
+circlePoints radiusSq =  [Size x y | x <- [-radius..radius], y <- [-radius..radius],  x * x + y * y <= radiusSq]
+    where radius = ceiling (sqrt (fromIntegral radiusSq))       
+        
+        
+mapOffsets :: (Monad m) => Int -> [a] -> (a -> Size -> m ()) -> m ()
+mapOffsets radiusSq xs action = do
+    forM_ xs $ \x -> do
+        forM_ offsets $ \offset -> action x offset         
+    where
+        offsets = circlePoints radiusSq  
+    
+       
+visibleSet :: Size -> Int -> [Point] -> U.Vector Bool
+visibleSet size radiusSq ants = U.create $ do
+    v <- UM.replicate (area size) False
+    
+    mapOffsets radiusSq ants $ \ant offset -> do
+       UM.unsafeWrite v (wrapIndex size (ant `addSize` offset)) True
+     
+    return v
+      
     
 updateVisibility :: U.Vector Bool -> Map -> Map
 updateVisibility vis (Map squares size) = Map squares' size 
@@ -133,8 +160,6 @@ findSquareBy world f origin size =  fmap (fromIndex (mapSize world)) (find f' in
 wrapIndex :: Size -> Point -> Int
 wrapIndex (Size width height) (Point x y) = (y `mod` height) * width + x `mod` width
 {-# INLINE wrapIndex #-}
-
-
 
         
 neighbors :: Point -> [Point]

@@ -90,7 +90,14 @@ renderContent world (Point sx sy) (Point ex ey) = do
      forM_ [sy.. ey] $ \y -> do
        let p = (Point x y)
        renderSquare (world `at` p) p
+
+renderPoints :: [Point] -> Render ()
+renderPoints ps = do
+   setColour magenta
    
+   forM_ ps $ \p -> do
+        drawCircle p 0.5
+        fill  
  
 renderSquare :: Square -> Point  -> Render ()
 renderSquare sq p = do

@@ -10,9 +10,12 @@ import Data.List
 
 import Ant.Game
 import Ant.Renderer
+import Ant.Scheduler
 
 import System.CPUTime
 import Text.Printf
+
+import Debug.Trace
 
 import qualified Data.IntMap as M
 import qualified Data.Vector.Unboxed as U
@@ -42,18 +45,17 @@ main = do
 
 main :: IO ()
 main = do
-    settings <- readSettings
-    print settings
-    
-    state <- runGame (initialState settings) 
-    print (gameStats state)
 
+    
     initGUI
     window <- windowNew
+
     set window [windowTitle := "Hello Cairo",
              windowDefaultWidth := 800, windowDefaultHeight := 600,
              containerBorderWidth := 10 ]
 
+
+             
     frame <- frameNew
     containerAdd window frame
     canvas <- drawingAreaNew
@@ -61,6 +63,13 @@ main = do
     widgetModifyBg canvas StateNormal (Color 65535 65535 65535)     
     widgetShowAll window 
     
+    settings <- readSettings
+    print settings
+    
+    state <- runGame (initialState settings) 
+    print (gameStats state)
+    
+        
     stateVar <- newMVar state
     canvas `on` exposeEvent $ updateCanvas stateVar
      
@@ -88,6 +97,8 @@ renderInWindow :: DrawableClass drawable => drawable -> GameState -> IO ()
 renderInWindow win state = do 
     (width, height) <- drawableGetSize win
     
+    traceShow "Here3" $ return ()
+    
     let s = fromIntegral $ round $ max 1.0 (0.9 * squareSize width height world)
 
     let vw = ceiling (fromIntegral width / s)
@@ -106,9 +117,17 @@ renderInWindow win state = do
 
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
+        traceShow "Here2" $ return ()
+        
         --renderMap (worldColour world) start end
         renderMap (regionColours world (regionMap builder)) start end    
-        renderGraph (mapSize world) graph
+        --renderGraph (mapSize world) graph
+        
+        traceShow "Here1" $ return ()
+        
+        let antSet = initialSet (map fst . fst . gsAnts $ stats)
+        let found = runScheduler world stats graph antSet testSearch
+        
 
         --renderMap (regionColours' fDist' world (regionMap builder)) start end 
                
@@ -128,6 +147,7 @@ renderInWindow win state = do
         
         --renderMap (passColours world (gamePass state)) start end
         renderContent world start end 
+        renderPoints found
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)

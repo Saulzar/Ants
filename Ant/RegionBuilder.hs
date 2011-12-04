@@ -157,7 +157,7 @@ seedRegions pass builder = builder' { candidates = S.empty }
         builder' = foldr addRegion builder (map (fromIndex (builderDim builder)) seeds)
      
 seedDistance :: Int
-seedDistance = 8
+seedDistance = 4
      
 findSeeds :: Passibility -> RegionBuilder -> [PointIndex]
 findSeeds pass builder = separate (manhattenIndex (builderDim builder)) maxDistance prioritised
@@ -166,22 +166,22 @@ findSeeds pass builder = separate (manhattenIndex (builderDim builder)) maxDista
         prioritised = sortBy (compare `on` (indexCost pass)) candidates'
         distance = snd . (regionMap builder `indexSq`)
         
-        validSeed p = distance p > seedDistance && pass `indexCost` p < 8
+        validSeed p = distance p > seedDistance && pass `indexCost` p < 6
         
         
 addRegion :: Point -> RegionBuilder -> RegionBuilder
 addRegion centre builder = builder 
-            { regions = M.insert (regionId region) region (regions builder)
-            , openRegions = S.insert (regionId region) (openRegions builder) 
+        { regions = M.insert (regionId region) region (regions builder)
+        , openRegions = S.insert (regionId region) (openRegions builder) 
+        }
+    where
+        region  = Region 
+            { regionId      = numRegions builder
+            , regionCentre  = centre
+            , regionNeighbors = M.empty
+            , regionSize      = 0
+            , regionFrontier  = True
             }
-        where
-            region  = Region 
-                { regionId      = numRegions builder
-                , regionCentre  = centre
-                , regionNeighbors = M.empty
-                , regionSize      = 0
-                , regionFrontier  = True
-                }
              
 
 separate :: (a -> a -> Int) -> Int -> [a] -> [a]        
@@ -232,11 +232,12 @@ neighborSquares size visited  = neighborSets !! 20  where
 makeEdges :: Size -> Region -> M.IntMap Int -> RegionGraph -> EdgeMap
 makeEdges size region conn regions =  M.mapWithKey edge conn 
     where edge i c = Edge 
-            { edgeDistance = manhatten size (regionCentre region) (regionCentre region')
+            { edgeDistance = (ceiling . sqrt) (fromIntegral sq)
             , edgeConnectivity = c
             }
             where
                 region' = fromJust (M.lookup i regions)
+                sq      = distanceSq size (regionCentre region) (regionCentre region')
         
 connectivity ::  RegionMap -> PointSet -> M.IntMap Int
 connectivity regions neighbors =  countAssocs regions' where
@@ -357,7 +358,7 @@ searchFrom p = SearchState
     }
             
 maxDistance ::  Int
-maxDistance = 12
+maxDistance = 8
                                               
 searchRegion :: Passibility -> Map -> RegionMap -> Region -> Set
 searchRegion pass world regions region = visitedSquares $ search successors maxSquares (searchFrom centre) where

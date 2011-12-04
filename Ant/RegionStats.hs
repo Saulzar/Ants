@@ -1,19 +1,22 @@
 {-# LANGUAGE PatternGuards, NoMonomorphismRestriction #-}
 
 module Ant.RegionStats 
-	( RegionContent (..)
+    ( RegionContent (..)
     , rcOurAnts
-	, RegionStats (..)
+    , RegionStats (..)
     , GameStats (..)
-	, regionVisibility
-	, hillDistances
+    , gsRegion
+
+    , regionVisibility
+    , hillDistances
     , initialStats
     , updateStats
 
     , indexV
     , indexU
-	)
-	where
+    
+    )
+    where
 
 import Data.List
 
@@ -22,6 +25,7 @@ import Ant.Point
 import Ant.RegionBuilder
 import Ant.IO
 import Ant.Square
+import Ant.Vector
 
 import Ant.Graph
 
@@ -43,166 +47,190 @@ import qualified Data.PriorityQueue.FingerTree as Q
 
 import Debug.Trace
 
-indexU :: (U.Unbox a) => U.Vector a -> Int -> a
-indexU = (U.!)
-{-# INLINE indexU #-}
 
-indexV :: V.Vector a -> Int -> a
-indexV = (V.!)
-{-# INLINE indexV #-}
-
-readV = VM.read
-{-# INLINE readV #-}
-
-writeV = VM.write
-{-# INLINE writeV #-}
-
-readU = UM.read
-{-# INLINE readU #-}
-
-writeU = UM.write
-{-# INLINE writeU #-}
 
 type AntList = [(Point, Player)]
 
 data RegionContent = RegionContent
-    { rcAnts       	:: AntList
-    , rcNearAnts   	:: AntList
-    , rcFood   		:: [Point]
-    , rcHills  		:: [(Point, Player)]
-	, rcDeadAnts	:: [(Point, Player)]
+    { rcAnts            :: AntList
+    , rcFood            :: [Point]
+    , rcHills           :: AntList
+    , rcDeadAnts        :: AntList
     } deriving Show
 
 rcOurAnts :: RegionContent -> [Point]
 rcOurAnts = map fst . filter ((== 0) . snd) . rcAnts
-	
+        
 data RegionStats = RegionStats
-	{ rsLastVisible 	:: !Int
-	, rsHillDistance 	:: !Int
-	, rsContent			:: !RegionContent
-
-	, rsDead		:: !(Int, Int)
-	, rsFightRecord :: !(Int, Int)
-
-    , rsAntCount        :: (Int, Int)
-    , rsNearAntCount    :: (Int, Int)
-
-	, rsEnemyPlayer :: Maybe Player  -- The main opponent here
-	} deriving Show
+    { rsLastVisible     :: !Int
+    , rsHillDistance    :: !Int
+    , rsContent         :: !RegionContent
+    , rsDead            :: !(Int, Int)
+    , rsFightRecord     :: !(Int, Int)
+    , rsAntCount        :: !(Int, Int)
+    
+    , rsEnemyPlayer :: Maybe Player  -- The main opponent here
+    } deriving Show
 
 data GameStats = GameStats
-	{ gsRegions     :: V.Vector RegionStats
-	, gsFightRecord :: U.Vector (Int, Int)
-	, gsFreeAnts	:: !Int
-	, gsShortage 	:: !Int
-	
-	, gsHills		:: S.Set (Point, Player)	
-	} deriving Show
+    { gsRegions     :: V.Vector RegionStats
+    , gsFightRecord :: U.Vector (Int, Int)
+    , gsFreeAnts        :: !Int
+    , gsShortage        :: !Int
+    , gsHills           :: S.Set (Point, Player)
+    , gsAnts            :: (AntList, AntList)
+    , gsInfluenceMap    :: U.Vector (Int, Int)
+    , gsRegionInfluence :: U.Vector (Int, Int)
+    , gsInfluenceArea       :: !Double
+    
+    } deriving Show
 
 
+gsRegion :: GameStats -> RegionIndex -> RegionStats
+gsRegion = indexV . gsRegions 
+    
 maxPlayers :: Int
 maxPlayers = 20
-	
-initialRegionStats = RegionStats	
-	{	rsLastVisible 	= 0
-	, 	rsHillDistance 	= 1000
-	, 	rsContent 		= emptyContent
-    ,   rsDead          = (0, 0)
-	,   rsFightRecord 	= (0, 0)
-    
+        
+initialRegionStats = RegionStats
+    { rsLastVisible     = 0
+    , rsHillDistance    = 1000
+    , rsContent         = emptyContent
+    , rsDead            = (0, 0)
+    , rsFightRecord     = (0, 0)
     , rsAntCount        = (0, 0)
-    , rsNearAntCount    = (0, 0)    
+    , rsEnemyPlayer     = Nothing 
+    }
     
-	, 	rsEnemyPlayer   = Nothing 
-	}
-	
 initialStats = GameStats
-	{ gsRegions = V.empty
-	, gsFightRecord = U.replicate maxPlayers (0, 0)
-	, gsFreeAnts 	= 0
-	, gsShortage 	= 0
-	, gsHills		= S.empty
-	}
-	
+    { gsRegions = V.empty
+    , gsFightRecord = U.replicate maxPlayers (0, 0)
+    , gsFreeAnts        = 0
+    , gsShortage        = 0
+    , gsHills           = S.empty
+    , gsAnts            = ([], [])
+    , gsInfluenceMap    = U.empty
+    , gsRegionInfluence = U.empty
+    , gsInfluenceArea       = 0.0
+    
+    }
+    
+    
 hills :: Map -> [SquareContent] -> S.Set (Point, Player) -> S.Set (Point, Player)
 hills world content hills = S.filter hillExists $ foldr S.insert hills visibleHills
-	where
-		visibleHills = map (\(p, Hill n) -> (p, n)) . filter (containsHill . snd) $ content
-		hillExists (p, _) = isHill (world `at` p)  
-	
+        where
+                visibleHills = map (\(p, Hill n) -> (p, n)) . filter (containsHill . snd) $ content
+                hillExists (p, _) = isHill (world `at` p)  
+        
 growRegions :: Int -> V.Vector RegionStats -> V.Vector RegionStats
 growRegions numRegions v = growRegions' newRegions	
-	where
-		newRegions = numRegions -  (V.length v)
+        where
+                newRegions = numRegions -  (V.length v)
 
-		growRegions' 0 = v
-		growRegions' n = v V.++ V.replicate newRegions initialRegionStats
-	
+                growRegions' 0 = v
+                growRegions' n = v V.++ V.replicate newRegions initialRegionStats
+        
 
 updateFightRecords :: V.Vector RegionStats -> U.Vector (Int, Int) -> U.Vector (Int, Int)
 updateFightRecords regionStats frVec = U.modify update frVec where
     update v = do
-    	V.forM_ regionStats $ \stats -> case (rsEnemyPlayer stats) of
-    		Nothing 		-> return ()
-    		(Just player)	-> do
-    			fr <- readU v player
-    			writeU v player (fr `addFightRecord` rsDead stats)	 
+        V.forM_ regionStats $ \stats -> case (rsEnemyPlayer stats) of
+                Nothing 		-> return ()
+                (Just player)	-> do
+                        fr <- readU v player
+                        writeU v player (fr `addFightRecord` rsDead stats)	 
+                        
+
+filterAnts :: [SquareContent] -> AntList
+filterAnts content = map fromAnt $ filter (containsAnt . snd) content
+    where fromAnt (p, (Ant n)) = (p, n)
+                            
+                        
+splitEnemy :: AntList -> (AntList, AntList)                        
+splitEnemy = partition ( (== 0) . snd )
+                        
 
 updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
-updateStats world graph regionMap vis content stats = stats
-	{ gsRegions = regionStats'
-	, gsFightRecord = updateFightRecords regionStats' (gsFightRecord stats)
-	, gsHills = hills'
-	}
-	where
+updateStats world graph regionMap vis content stats = traceShow "updateStats" $ stats
+        { gsRegions = regionStats'
+        , gsFightRecord = updateFightRecords regionStats' (gsFightRecord stats)
+        , gsHills = hills'
+        , gsAnts  = (ourAnts, enemyAnts)
+        , gsInfluenceMap    = influence
+        , gsRegionInfluence = regionInfl
+        , gsInfluenceArea   = fromIntegral (length (circlePoints distSq)) 
+        }
+        where
 
-		regionVisibility' = regionVisibility (grSize graph) regionMap vis  
-		hills'    = hills world content (gsHills stats)
-		
-		getRegion      = regionAt regionMap (mapSize world)
-		regionDistances = hillDistances graph (map getRegion . map fst . S.toList $ hills')
-		
-		regionContent'  = regionContent (mapSize world) graph regionMap content
+            regionVisibility' = regionVisibility numRegions regionMap vis  
+            hills'    = hills world content (gsHills stats)
+            
+            getRegion      = regionAt regionMap size
+            
+            hillRegions     = filter ( /= invalidRegion) . map getRegion . map fst . S.toList $ hills'
+            regionDistances = hillDistances graph hillRegions
+            
+            regionContent'  = regionContent (mapSize world) graph regionMap content
 
-		regions' = growRegions (grSize graph) (gsRegions stats) 
-		regionStats' = regionStats regionVisibility' regionDistances regionContent' graph regions'
-		
+            regions' = growRegions numRegions (gsRegions stats) 
+            regionStats' = regionStats regionVisibility' regionDistances regionContent' graph regions'
+                
+            (ourAnts, enemyAnts) = splitEnemy . filterAnts $ content
+            influence = U.zip (infl ourAnts) (infl enemyAnts)
+            regionInfl = countInfluence numRegions regionMap influence
+            
+            infl ants = influenceCount size distSq (map fst ants)
 
-	
-	
+            size = mapSize world
+            distSq = 7
+            
+            numRegions = grSize graph
+
+        
+        
 addContent :: RegionContent -> SquareContent -> RegionContent
-addContent rc (p, Ant n)    = rc { rcAnts    = (p, n) : rcAnts rc }
-addContent rc (p, DeadAnt n)    = rc { rcDeadAnts  = (p, n) : rcDeadAnts rc }
-addContent rc (p, Hill n)   = rc { rcHills = (p, n) : rcHills rc }
-addContent rc (p, Food)     = rc { rcFood  = p : rcFood rc }
-addContent rc _             = rc
+addContent rc (p, Ant n)     = rc { rcAnts    = (p, n) : rcAnts rc }
+addContent rc (p, DeadAnt n) = rc { rcDeadAnts  = (p, n) : rcDeadAnts rc }
+addContent rc (p, Hill n)    = rc { rcHills = (p, n) : rcHills rc }
+addContent rc (p, Food)      = rc { rcFood  = p : rcFood rc }
+addContent rc _              = rc
      
 emptyContent = RegionContent
-		{ rcAnts 	 = []
-		, rcDeadAnts = []
-		, rcFood 	 = []
-		, rcHills 	 = []
-        , rcNearAnts = []
-		}
-		
+    { rcAnts     = []
+    , rcDeadAnts = []
+    , rcFood     = []
+    , rcHills    = []
+    }
+                
 
+forRegion :: (Monad m) => RegionMap -> (Int -> RegionIndex -> m ()) -> m ()
+forRegion regionMap action = do
+    forM_ [0.. U.length regionMap - 1] $ \i -> do
+            let (region, _) = regionMap `indexU` i 
+            when (region /= invalidRegion) $ action i region       
+                
 regionVisibility :: Int -> RegionMap -> U.Vector Bool -> U.Vector Int
-regionVisibility numRegions regionMap visible = runST countVisible
-	where
-        countVisible :: ST s (U.Vector Int)
-        countVisible = do
-                        
-            v <- UM.replicate numRegions 0
-            forM_ [0.. U.length regionMap - 1] $ \i -> when (visible `indexU` i) $ do
-                let (region, _) = regionMap `indexU` i 
-                when (region /= invalidRegion) $ do           
-                    n <- readU v region
-                    writeU v region (n + 1)   
-            U.unsafeFreeze v
+regionVisibility numRegions regionMap visible = U.create $ do                 
+        v <- UM.replicate numRegions 0
+        forRegion regionMap $ \i region -> when (visible `indexU` i) $ do
+            n <- readU v region
+            writeU v region (n + 1)   
+        return v
 
-	
+
+countInfluence :: Int -> RegionMap -> U.Vector (Int, Int) -> U.Vector (Int, Int)
+countInfluence numRegions regionMap influence = U.create $ do                 
+        v <- UM.replicate numRegions (0, 0)
+        forRegion regionMap $ \i region -> do
+            let (our, enemy) = influence `indexU` i 
+            (our', enemy') <- readU v region
+            
+            writeU v region (our + our', enemy + enemy')   
+        return v
+            
+        
 type Queue = Q.PQueue Distance RegionIndex 	
-	
+        
 edgeDistances :: Int -> RegionIndex -> Graph -> [(Distance, RegionIndex)]
 edgeDistances d i graph = map toDistancePair (grEdges i graph)
     where
@@ -221,7 +249,7 @@ hillDistances graph hills = runST searchHills where
         searchHills' v initialQueue
         U.unsafeFreeze v
      
-    searchHills' v queue | Nothing 				  <- view = return ()	
+    searchHills' v queue | Nothing                <- view = return ()	
                          | Just ((d, r), queue')  <- view = do
             
             successors <- filterM (isSuccessor d) (edgeDistances d r graph)
@@ -235,27 +263,9 @@ hillDistances graph hills = runST searchHills where
                 d'' <- readU v r'
                 return (d' < d'')
                
-nearRadius :: Int                
-nearRadius = 16
-
-nearbyAnts :: Size -> Point -> [RegionContent] -> AntList
-nearbyAnts worldSize p rcs = filter ( (< nearRadius)  . distance)  allAnts 
-	where
-		allAnts 	 = concatMap rcAnts rcs
-		distance (p', _) = manhatten worldSize p p' 
-
-
 
 regionContent :: Size -> Graph -> RegionMap -> [SquareContent] -> V.Vector RegionContent
-regionContent worldSize graph regionMap content = addNearby worldSize graph rc 
-	where rc = regionContent' worldSize (grSize graph) regionMap content
-
-addNearby :: Size -> Graph -> V.Vector RegionContent -> V.Vector RegionContent
-addNearby worldSize graph content = V.imap (\i c -> c { rcNearAnts = nearby i } ) content
-	where nearby i = nearbyAnts worldSize centre cs
-		where 
-			centre  = regionCentre (graph `grIndex` i)
-			cs = map (indexV content)  (grEdgeIndices i graph)
+regionContent worldSize graph regionMap content = regionContent' worldSize (grSize graph) regionMap content
 
 regionContent' :: Size -> Int -> RegionMap -> [SquareContent] ->  V.Vector RegionContent
 regionContent' worldSize numRegions regionMap content = runST regionStats'
@@ -286,37 +296,31 @@ addFightRecord :: (Int, Int) -> (Int, Int) -> (Int, Int)
 addFightRecord (e, p) (e', p') = (e + e', p + p')
 
 
-regionStats :: U.Vector Int -> U.Vector Int -> V.Vector RegionContent -> Graph -> V.Vector RegionStats -> V.Vector RegionStats
+regionStats :: U.Vector Int -> U.Vector Int -> V.Vector RegionContent -> Graph -> V.Vector RegionStats -> V.Vector RegionStats 
 regionStats visVec distVec contVec graph statsVec = V.generate (V.length statsVec) fromIndex where
 
     fromIndex i = regionStats' (visVec `indexU` i) (distVec `indexU` i) (contVec `indexV` i) (graph `grIndex` i) (statsVec `indexV` i)
 
     regionStats' numVisible hillDistance content region stats = stats
-		{ rsLastVisible  = lastVisible
-		, rsHillDistance = hillDistance
-		, rsContent 	 = content
+            { rsLastVisible  = lastVisible
+            , rsHillDistance = hillDistance
+            , rsContent      = content
 
-		, rsDead		 = dead
-		, rsFightRecord	 = addFightRecord dead (rsFightRecord stats)
+            , rsDead         = dead
+            , rsFightRecord  = addFightRecord dead (rsFightRecord stats)
 
-        , rsAntCount     = (length ourAnts, length enemyAnts)
-        , rsNearAntCount = (length enemyAntsNear, length enemyAntsNear)
+            , rsAntCount     = (length ourAnts, length enemyAnts)
+            , rsEnemyPlayer  = maxPlayer (enemyDead ++ enemyAnts)
+            
+            }
+            where 
+                lastVisible | regionSize region > 0 && isVisible  = rsLastVisible stats + 1
+                            | otherwise = 0
+                            
+                isVisible = (numVisible `div` regionSize region * 100) > 80  
 
-		, rsEnemyPlayer  = maxPlayer (enemyDead ++ enemyAnts)
-		
-		}
-		where 
-            lastVisible | regionSize region > 0 && isVisible  = rsLastVisible stats + 1
-               	        | otherwise = 0
-			
-            isVisible = (numVisible `div` regionSize region * 100) > 80  
+                (ourDead, enemyDead) = splitEnemy (rcDeadAnts content)
+                (ourAnts, enemyAnts) = splitEnemy (rcAnts content)
 
-            splitEnemy = partition ( (== 0) . snd )
-
-            (ourDead, enemyDead) = splitEnemy (rcDeadAnts content)
-            (ourAntsNear, enemyAntsNear) = splitEnemy (rcAnts content ++ rcNearAnts content)
-
-            (ourAnts, enemyAnts) = splitEnemy (rcAnts content)
-
-            dead = (length enemyDead, length ourDead)
+                dead = (length enemyDead, length ourDead)
 
