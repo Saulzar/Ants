@@ -81,7 +81,7 @@ data GameStats = GameStats
     , gsAnts            :: (AntList, AntList)
     , gsInfluenceMap    :: U.Vector (Int, Int)
     , gsRegionInfluence :: U.Vector (Int, Int)
-    , gsInfluenceArea       :: !Double
+    , gsInfluenceArea       :: !Int
     
     } deriving Show
 
@@ -111,7 +111,7 @@ initialStats = GameStats
     , gsAnts            = ([], [])
     , gsInfluenceMap    = U.empty
     , gsRegionInfluence = U.empty
-    , gsInfluenceArea       = 0.0
+    , gsInfluenceArea       = 0
     
     }
     
@@ -158,7 +158,7 @@ updateStats world graph regionMap vis content stats = traceShow "updateStats" $ 
         , gsAnts  = (ourAnts, enemyAnts)
         , gsInfluenceMap    = influence
         , gsRegionInfluence = regionInfl
-        , gsInfluenceArea   = fromIntegral (length (circlePoints distSq)) 
+        , gsInfluenceArea   = length (circlePoints distSq)
         }
         where
 
@@ -182,7 +182,7 @@ updateStats world graph regionMap vis content stats = traceShow "updateStats" $ 
             infl ants = influenceCount size distSq (map fst ants)
 
             size = mapSize world
-            distSq = 7
+            distSq = 15
             
             numRegions = grSize graph
 

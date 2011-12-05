@@ -6,11 +6,15 @@ import Graphics.Rendering.Cairo
 import Control.Monad
 
 import Control.Concurrent
+
+
 import Data.List
+import Data.Maybe
 
 import Ant.Game
 import Ant.Renderer
 import Ant.Scheduler
+import Ant.Diffusion
 
 import System.CPUTime
 import Text.Printf
@@ -126,7 +130,7 @@ renderInWindow win state = do
 
         
 
-       renderMap (regionColours' fDist' world (regionMap builder)) start end 
+        renderMap (regionColours' (diffused `indexU`) world (regionMap builder)) start end 
                
         {-let (Just r) = M.lookup 8 (regions graph)
     
@@ -168,17 +172,19 @@ renderInWindow win state = do
         fDist' r = (fromIntegral d / 120.0) where
             d = rsHillDistance (gsRegions stats `indexV` r)
 
-        
+        density' p = fromMaybe 0 (density p)
             
-        density p | enemyInf < 2 * area = Just ourInf
-                  | otherwise           = Nothing
+        density :: RegionIndex -> Maybe Double
+        density p = Just (fromIntegral ourInf / 50.0)
             where
-            (ourInf, enemyInf) = p `indexV` gsRegionInfluence stats
-            area = gsInfluenceArea stats
+                (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` p
+                area = gsInfluenceArea stats
         
            
             
         diffGr = diffusionGraph graph density       
+        diffused = (diffuse 1.2 diffGr) !! 200
+        
         
         
 squareSize :: Int -> Int -> Map -> Double

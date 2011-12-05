@@ -219,7 +219,7 @@ regionColours' lookupColor world regionMap p = mapColours world colour p
         region = regionAt regionMap (mapSize world) p
         intensity = lookupColor region
 
-        colour | region >= 0 = (sRGB intensity intensity intensity)
+        colour | region >= 0 = (sRGB 0 intensity 0)
                | otherwise   = red
 {-# INLINE regionColours' #-}
 
