@@ -117,19 +117,16 @@ renderInWindow win state = do
 
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
-        traceShow "Here2" $ return ()
         
         --renderMap (worldColour world) start end
         renderMap (regionColours world (regionMap builder)) start end    
         --renderGraph (mapSize world) graph
         
-        traceShow "Here1" $ return ()
-        
-        let antSet = initialSet (map fst . fst . gsAnts $ stats)
-        let found = runScheduler world stats graph antSet testSearch
         
 
-        --renderMap (regionColours' fDist' world (regionMap builder)) start end 
+        
+
+       renderMap (regionColours' fDist' world (regionMap builder)) start end 
                
         {-let (Just r) = M.lookup 8 (regions graph)
     
@@ -147,7 +144,14 @@ renderInWindow win state = do
         
         --renderMap (passColours world (gamePass state)) start end
         renderContent world start end 
+        
+        {-
+        let antSet = initialSet (map fst . fst . gsAnts $ stats)
+        let found = runScheduler world stats graph antSet testSearch        
         renderPoints found
+        -}
+        
+
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)
@@ -164,7 +168,17 @@ renderInWindow win state = do
         fDist' r = (fromIntegral d / 120.0) where
             d = rsHillDistance (gsRegions stats `indexV` r)
 
-               
+        
+            
+        density p | enemyInf < 2 * area = Just ourInf
+                  | otherwise           = Nothing
+            where
+            (ourInf, enemyInf) = p `indexV` gsRegionInfluence stats
+            area = gsInfluenceArea stats
+        
+           
+            
+        diffGr = diffusionGraph graph density       
         
         
 squareSize :: Int -> Int -> Map -> Double

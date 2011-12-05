@@ -13,13 +13,13 @@ module Ant.Graph
     , grRegions
     , grEmpty
     
-    , SearchNode(..)
+{-
     , grBFS
     , grAStar
     , grPath
     
     , grSucc
-    
+  -}  
     , grTest
 	)
 where
@@ -27,7 +27,7 @@ where
 import Ant.Point
 import Ant.RegionBuilder
 import Ant.Map
-import Ant.Search
+ -- import Ant.Search
 import Ant.Vector
 
 import qualified Data.IntMap as M
@@ -84,7 +84,7 @@ grSize (Graph v) = V.length v
 grRegions :: Graph -> [Region]
 grRegions (Graph v) = V.toList v
 
-    
+{-    
     
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
 edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
@@ -122,7 +122,7 @@ grSuccDistance graph = grSucc graph distance
     where distance _ _ e = Just (edgeDistance e)
 {-# INLINE grSuccDistance #-}            
         
-            
+            -}
             
 grTest :: Size -> Graph
 grTest (Size w h) =  Graph regions where

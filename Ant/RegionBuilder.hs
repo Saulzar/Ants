@@ -157,7 +157,7 @@ seedRegions pass builder = builder' { candidates = S.empty }
         builder' = foldr addRegion builder (map (fromIndex (builderDim builder)) seeds)
      
 seedDistance :: Int
-seedDistance = 4
+seedDistance = 6
      
 findSeeds :: Passibility -> RegionBuilder -> [PointIndex]
 findSeeds pass builder = separate (manhattenIndex (builderDim builder)) maxDistance prioritised

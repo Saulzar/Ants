@@ -1,6 +1,8 @@
 {-# LANGUAGE PatternGuards #-}
 
-module Ant.Scheduler where
+module Ant.Scheduler 
+
+where
 
 import Ant.Point
 import Ant.IO
@@ -8,7 +10,7 @@ import Ant.Graph
 import Ant.RegionBuilder
 import Ant.Map
 import Ant.RegionStats
-import Ant.Search
+-- import Ant.Search
 
 import Data.List
 import Data.Function
@@ -60,7 +62,7 @@ freeAnts :: [Point] -> Scheduler [Point]
 freeAnts = filterM freeAnt
 {-# INLINE freeAnts #-}  
 
-
+{-
 
 predNode :: SearchNode -> SearchNode
 predNode node | (Just pred) <- snPred node = pred
@@ -132,7 +134,7 @@ getAnts region numRequired maxDistance = do
                     then getAnts' rest (n + length ants) ants'
                     else return ants'
                                     
-
+-}
                     
 
 {-
