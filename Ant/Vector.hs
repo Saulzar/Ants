@@ -9,6 +9,29 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
 
+#ifndef DEBUG
+
+indexU :: (U.Unbox a) => U.Vector a -> Int -> a
+indexU = U.unsafeIndex
+{-# INLINE indexU #-}
+
+indexV :: V.Vector a -> Int -> a
+indexV = V.unsafeIndex
+{-# INLINE indexV #-}
+
+readV = VM.unsafeRead
+{-# INLINE readV #-}
+
+writeV = VM.unsafeWrite
+{-# INLINE writeV #-}
+
+readU = UM.unsafeRead
+{-# INLINE readU #-}
+
+writeU = UM.unsafeWrite
+{-# INLINE writeU #-}
+
+#else
 
 indexU :: (U.Unbox a) => U.Vector a -> Int -> a
 indexU = (U.!)
@@ -29,3 +52,6 @@ readU = UM.read
 
 writeU = UM.write
 {-# INLINE writeU #-}
+
+
+#endif

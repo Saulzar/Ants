@@ -5,10 +5,10 @@ module Ant.RegionBuilder
     , RegionMap
     , Region (..)
     , RegionIndex
-	, RegionGraph
-	
-	, EdgeMap
-	, Edge (..)
+    , RegionGraph
+    
+    , EdgeMap
+    , Edge (..)
     
     , regions
     , regionMap

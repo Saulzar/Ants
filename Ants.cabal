@@ -45,6 +45,9 @@ Build-type:          Simple
 -- Constraint on the version of Cabal needed to build this package.
 Cabal-version:       >=1.2
 
+Flag Debug
+  Description: Enable debug support
+  Default:     False
 
 -- Executable Ants
   -- .hs or .lhs file containing the Main module.
@@ -85,7 +88,17 @@ Executable Debugger
       colour >= 2.3,
       fingertree >= 0.0.1,
       PSQueue >= 1.1
+
+  if flag(debug)
+    GHC-Options: -DDEBUG
+  else
+      CC-Options: "-DNDEBUG"
+
+  Extensions:      CPP
       
+  if flag(debug)
+    CC-Options: "-DDEBUG"
+    GHC-Options: -DDEBUG            
       
   ghc-options: -threaded -O1 -funbox-strict-fields 
       

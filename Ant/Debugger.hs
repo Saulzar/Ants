@@ -149,11 +149,11 @@ renderInWindow win state = do
         --renderMap (passColours world (gamePass state)) start end
         renderContent world start end 
         
-        {-
+        
         let antSet = initialSet (map fst . fst . gsAnts $ stats)
         let found = runScheduler world stats graph antSet testSearch        
         renderPoints found
-        -}
+        
         
 
         
