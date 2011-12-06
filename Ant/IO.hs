@@ -18,6 +18,7 @@ module Ant.IO
     , containsDeadAnt
 	, containsHill
 	, containsFood
+    , containsWater
     )
     
 where
@@ -97,6 +98,9 @@ containsFood :: Content -> Bool
 containsFood Food  = True 
 containsFood _     = False  
 
+containsWater :: Content -> Bool
+containsWater Water  = True 
+containsWater _     = False  
 			 
 orderString :: Order -> String
 orderString (Point x y, dir) = "o " ++ (show x) ++ " " ++ (show y) ++ " " ++ (dirString dir)

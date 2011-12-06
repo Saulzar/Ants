@@ -123,14 +123,15 @@ renderInWindow win state = do
         
         
         --renderMap (worldColour world) start end
-        renderMap (regionColours world (regionMap builder)) start end    
-        --renderGraph (mapSize world) graph
+        --renderMap (regionColours world (regionMap builder)) start end    
+        
         
         
 
         
 
         renderMap (regionColours' (diffused `indexU`) world (regionMap builder)) start end 
+        renderGraph (mapSize world) graph
                
         {-let (Just r) = M.lookup 8 (regions graph)
     

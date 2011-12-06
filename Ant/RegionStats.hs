@@ -81,7 +81,8 @@ data GameStats = GameStats
     , gsAnts            :: (AntList, AntList)
     , gsInfluenceMap    :: U.Vector (Int, Int)
     , gsRegionInfluence :: U.Vector (Int, Int)
-    , gsInfluenceArea       :: !Int
+    , gsInfluenceArea   :: !Int
+    , gsContent         :: [SquareContent]     
     
     } deriving Show
 
@@ -112,7 +113,7 @@ initialStats = GameStats
     , gsInfluenceMap    = U.empty
     , gsRegionInfluence = U.empty
     , gsInfluenceArea       = 0
-    
+    , gsContent             = []
     }
     
     
@@ -151,7 +152,7 @@ splitEnemy = partition ( (== 0) . snd )
                         
 
 updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
-updateStats world graph regionMap vis content stats = traceShow "updateStats" $ stats
+updateStats world graph regionMap vis content stats = stats
         { gsRegions = regionStats'
         , gsFightRecord = updateFightRecords regionStats' (gsFightRecord stats)
         , gsHills = hills'
@@ -159,6 +160,7 @@ updateStats world graph regionMap vis content stats = traceShow "updateStats" $ 
         , gsInfluenceMap    = influence
         , gsRegionInfluence = regionInfl
         , gsInfluenceArea   = length (circlePoints distSq)
+        , gsContent         = content'
         }
         where
 
@@ -170,12 +172,16 @@ updateStats world graph regionMap vis content stats = traceShow "updateStats" $ 
             hillRegions     = filter ( /= invalidRegion) . map getRegion . map fst . S.toList $ hills'
             regionDistances = hillDistances graph hillRegions
             
-            regionContent'  = regionContent (mapSize world) graph regionMap content
+            -- Remember content we can't see
+            hidden   = filter (not . (vis `indexU`) . wrapIndex size .  fst) (gsContent stats)
+            content' = hidden ++ content
+            
+            regionContent'  = regionContent (mapSize world) graph regionMap content'
 
             regions' = growRegions numRegions (gsRegions stats) 
             regionStats' = regionStats regionVisibility' regionDistances regionContent' graph regions'
                 
-            (ourAnts, enemyAnts) = splitEnemy . filterAnts $ content
+            (ourAnts, enemyAnts) = splitEnemy . filterAnts $ content'
             influence = U.zip (infl ourAnts) (infl enemyAnts)
             regionInfl = countInfluence numRegions regionMap influence
             
@@ -264,15 +270,13 @@ hillDistances graph hills = runST searchHills where
                 return (d' < d'')
                
 
-regionContent :: Size -> Graph -> RegionMap -> [SquareContent] -> V.Vector RegionContent
-regionContent worldSize graph regionMap content = regionContent' worldSize (grSize graph) regionMap content
 
-regionContent' :: Size -> Int -> RegionMap -> [SquareContent] ->  V.Vector RegionContent
-regionContent' worldSize numRegions regionMap content = runST regionStats'
+regionContent :: Size -> Graph -> RegionMap -> [SquareContent] -> V.Vector RegionContent
+regionContent worldSize graph regionMap content = runST allContent
     where 
-        regionStats' :: ST s (V.Vector RegionContent)
-        regionStats' = do
-            v <- VM.replicate numRegions emptyContent
+        allContent :: ST s (V.Vector RegionContent)
+        allContent = do
+            v <- VM.replicate (grSize graph) emptyContent
                 
             forM_ content $ \(p, c) -> do
                 let i = regionAt regionMap worldSize p

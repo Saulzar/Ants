@@ -17,6 +17,7 @@ import Ant.Search
 
 import Data.List
 import Data.Function
+import Data.Maybe
 
 import Debug.Trace
 
@@ -86,12 +87,13 @@ succRegion graph stats = grSucc graph distance where
                     
 {-# INLINE succRegion #-}            
 
+assignedAnts :: Scheduler [Point]
+assignedAnts = gets (map fst . M.toList . M.filter (/= Unassigned))
 
 testSearch :: Scheduler [Point]
 testSearch = do
-
-    
-    numRegions <- asks  (grSize . cGraph)
+   
+   {- numRegions <- asks  (grSize . cGraph)
     
     traceShow "Testsearch" $ return ()
     
@@ -100,8 +102,14 @@ testSearch = do
         
         ants <- getAntPaths (r `mod` numRegions)  170 50
         traceShow (maximum $ [0] ++ map adDistance ants) $ return () 
+        
+        -}
     
-    ants <- getAnts 0 170 50
+    --gatherFoodAt 70
+    --gatherFoodAt 78
+    
+    gatherFood
+    ants <- assignedAnts
     traceShow (length ants) $ return ()
     
     return ants
@@ -116,8 +124,8 @@ freeAntsRegion region = do
     freeAnts (map fst . rcAnts . rsContent $ rs)
 {-# INLINE freeAntsRegion #-}
     
-findAnts :: forall a. (SearchNode -> Point ->  Scheduler a) -> RegionIndex -> Int -> Distance -> Scheduler [a]
-findAnts action region minRequired maxDistance = do     
+findAnts :: forall a. (SearchNode -> Point ->  Maybe a) -> RegionIndex -> Int -> Distance -> Scheduler [a]
+findAnts f region minRequired maxDistance = do     
     stats <- asks cStats
     graph <- asks cGraph
     
@@ -131,8 +139,8 @@ findAnts action region minRequired maxDistance = do
         getAnts' (sn : rest) n accum | snDistance sn > maxDistance = return accum
                                      | otherwise = do
                 ants <- freeAntsRegion (snKey sn) 
-                ants' <- mapM (action sn) ants 
-                
+                let ants' = catMaybes . map (f sn) $ ants 
+                                              
                 if (n + length ants < minRequired) 
                     then getAnts' rest (n + length ants) (ants' ++ accum)
                     else return (ants' ++ accum)
@@ -152,29 +160,49 @@ onPath size graph stats sn p = AntDirection p prevR distance where
 {-# INLINE onPath #-}
 
 getAnts :: RegionIndex -> Int -> Distance -> Scheduler [Point]
-getAnts = findAnts (\sn p -> return p) 
+getAnts = findAnts (\_ p -> Just p) 
                 
 getAntPaths :: RegionIndex -> Int -> Distance -> Scheduler [AntDirection]
 getAntPaths region numRequired maxDistance = do
     
-    action <- liftM3 onPath (asks (mapSize . cWorld)) (asks cGraph) (asks cStats)
-    ants   <- findAnts ((return .) . action) region numRequired maxDistance
+    toPath <- liftM3 onPath (asks (mapSize . cWorld)) (asks cGraph) (asks cStats)
+    ants   <- findAnts (\sn p -> Just (toPath sn p)) region numRequired maxDistance
     
     return $ take numRequired . sortBy (compare `on` adDistance) $ ants
-    {-
+    
                                        
 foodDistance :: Distance
-foodDistance = 20
-                                       
-gatherFood :: RegionIndex -> Scheduler ()
-gatherFood region = do
+foodDistance = 40
+
+assignFood :: [Point] -> Point -> Scheduler ()
+assignFood []    _  = traceShow "None" $ return ()
+assignFood ants  p = do
+    size <- asks (mapSize . cWorld)
+    ants' <- freeAnts ants
     
-    food <- asks (rcFood . rsContent . gsRegion r . cStats)           
-    ants <- getAnts region foodDistance (length food + 2)
+    let ant = minimumBy (compare `on` manhatten size p) ants'
+    reserveAnt ant (Gather p)
     
-    forM_ food $ \foodSq -> do
+    --traceShow ant $ return ()
+
+gatherFoodAt :: RegionIndex -> Scheduler ()
+gatherFoodAt region = do
+    food <- asks (rcFood . rsContent . (`gsRegion` region) . cStats)           
+    
+       
+    when (length food > 0) $ do          
+        -- Find some nearby ants 
+        traceShow (region, food) $ return ()
         
-              -}              
+        ants <- getAnts region (length food + 2) foodDistance                
+        forM_ food (assignFood ants)
+            
+        
+gatherFood :: Scheduler ()
+gatherFood = do
+    regions <- asks (grNodes . cGraph)
+    mapM_ gatherFoodAt regions
+
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]
 getAnts regions stats = concatMap () regions

@@ -107,9 +107,9 @@ updateState content = do
     stats <- gets gameStats
 	
     let graph = grCreate (regions builder')
-    let stats' = updateStats world' graph (regionMap builder') vis content stats
-
-     -- liftIO $ print stats'
+    let content' = filter (not . containsWater . snd) content
+    
+    let stats' = updateStats world' graph (regionMap builder') vis content' stats
 
 
     stats `seq` modify $ \gameState -> gameState 

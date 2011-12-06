@@ -11,6 +11,7 @@ module Ant.Graph
     , grIndex
     , grSize
     , grRegions
+    , grNodes
     , grEmpty
     
     , grBFS
@@ -82,7 +83,10 @@ grSize (Graph v) = V.length v
 grRegions :: Graph -> [Region]
 grRegions (Graph v) = V.toList v
     
-    
+grNodes :: Graph -> [RegionIndex]
+grNodes graph = [0..grSize graph - 1]
+{-# INLINE grNodes #-}
+
 edgeDistances :: Graph -> SearchNode -> [SearchNode]
 edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
     where toNode (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
