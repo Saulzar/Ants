@@ -80,8 +80,7 @@ data GameStats = GameStats
     , gsHills           :: S.Set (Point, Player)
     , gsAnts            :: (AntList, AntList)
     , gsInfluenceMap    :: U.Vector (Int, Int)
-    , gsRegionInfluence :: U.Vector (Int, Int)
-    , gsInfluenceArea   :: !Int
+    , gsRegionInfluence :: U.Vector (Float, Float)
     , gsContent         :: [SquareContent]     
     
     } deriving Show
@@ -112,7 +111,6 @@ initialStats = GameStats
     , gsAnts            = ([], [])
     , gsInfluenceMap    = U.empty
     , gsRegionInfluence = U.empty
-    , gsInfluenceArea       = 0
     , gsContent             = []
     }
     
@@ -158,8 +156,7 @@ updateStats world graph regionMap vis content stats = stats
         , gsHills = hills'
         , gsAnts  = (ourAnts, enemyAnts)
         , gsInfluenceMap    = influence
-        , gsRegionInfluence = regionInfl
-        , gsInfluenceArea   = length (circlePoints distSq)
+        , gsRegionInfluence = regionInfluence
         , gsContent         = content'
         }
         where
@@ -183,12 +180,14 @@ updateStats world graph regionMap vis content stats = stats
                 
             (ourAnts, enemyAnts) = splitEnemy . filterAnts $ content'
             influence = U.zip (infl ourAnts) (infl enemyAnts)
-            regionInfl = countInfluence numRegions regionMap influence
+            regionInfluence = sumRegionInfluence influenceScale numRegions regionMap influence
             
             infl ants = influenceCount size distSq (map fst ants)
 
             size = mapSize world
             distSq = 15
+            
+            influenceScale = 1.0 / fromIntegral (length (circlePoints distSq))
             
             numRegions = grSize graph
 
@@ -224,14 +223,14 @@ regionVisibility numRegions regionMap visible = U.create $ do
         return v
 
 
-countInfluence :: Int -> RegionMap -> U.Vector (Int, Int) -> U.Vector (Int, Int)
-countInfluence numRegions regionMap influence = U.create $ do                 
+sumRegionInfluence :: Float -> Int -> RegionMap -> U.Vector (Int, Int) -> U.Vector (Float, Float)
+sumRegionInfluence scale numRegions regionMap influence = U.create $ do                 
         v <- UM.replicate numRegions (0, 0)
         forRegion regionMap $ \i region -> do
-            let (our, enemy) = influence `indexU` i 
-            (our', enemy') <- readU v region
+            let (our', enemy') = influence `indexU` i 
+            (our, enemy) <- readU v region
             
-            writeU v region (our + our', enemy + enemy')   
+            writeU v region (our + scale * fromIntegral our', enemy + scale * fromIntegral enemy')   
         return v
             
         
@@ -318,7 +317,7 @@ regionStats visVec distVec contVec graph statsVec = V.generate (V.length statsVe
             
             }
             where 
-                lastVisible | regionSize region > 0 && isVisible  = rsLastVisible stats + 1
+                lastVisible | regionSize region > 0 && (not isVisible)  = rsLastVisible stats + 1
                             | otherwise = 0
                             
                 isVisible = (numVisible `div` regionSize region * 100) > 80  

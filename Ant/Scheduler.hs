@@ -4,6 +4,7 @@ module Ant.Scheduler
     ( runScheduler
     , initialSet
     , testSearch
+    , diffuseAnts
     )
 where
 
@@ -14,6 +15,7 @@ import Ant.RegionBuilder
 import Ant.Map
 import Ant.RegionStats
 import Ant.Search
+import Ant.Diffusion
 
 import Data.List
 import Data.Function
@@ -27,10 +29,12 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 
+import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as U
 
 type AntSet = M.Map Point Task
 
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard deriving Eq
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving Eq
 
 runScheduler :: Map -> GameStats -> Graph -> AntSet -> Scheduler a -> a
 runScheduler world stats graph ants action = runReader (evalStateT action ants) ctx
@@ -81,10 +85,9 @@ succRegion graph stats = grSucc graph distance where
             (our, enemy) = (gsRegionInfluence stats) `indexU`  r'
                         
             -- Modify distance by number of enemies, if there are a lot it is likely to be a logjam
-            slow = 1.0 + 0.3 * (fromIntegral enemy / area)
+            slow = 1.0 + 0.3 * enemy
             d    = slow * fromIntegral (edgeDistance e) 
-            area = fromIntegral (gsInfluenceArea stats)
-                    
+                     
 {-# INLINE succRegion #-}            
 
 assignedAnts :: Scheduler [Point]
@@ -207,30 +210,47 @@ gatherFood = do
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
     regions <- asks (grNodes . cGraph)
-    mapM regionDensity regions
     
-regionDensity :: RegionIndex -> Scheduler (Maybe Double)
-regionDensity region = do 
+    densities <- mapM regionDensity regions
+    passable <- mapM diffusableRegion regions
+    
+    let densityVec = U.fromList densities
+    let passableVec = U.fromList passable
+    
+    graph <- asks cGraph
+    let flow = flowGraph graph passableVec 
+    
+    let diffused = (diffuse 1.2 flow densityVec) !! 20
+    
+    mapM_ (diffuseRegion flow diffused) regions
+    return ()
+    
+    
+diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
+diffuseRegion = undefined    
+    
+diffusableRegion :: RegionIndex -> Scheduler Bool
+diffusableRegion region = do 
     stats <- asks cStats 
 
     let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
-    
-    if enemyInfluence > 2 
-        then return Nothing 
-        else density' stats
+    return (enemyInfluence > 2) 
+                
         
-    where
+regionDensity :: RegionIndex -> Scheduler Float
+regionDensity region = do  
+    stats <- asks cStats 
+            
+    let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
+    let visibleMod = max (-0.1 * fromIntegral lastVisible) (-1.0)
     
-        density' stats = do
-            
-            let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
-            let visibleMod = -0.1 * fromIntegral lastVisible
+    traceShow (region, lastVisible) $ return ()
 
-            frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
-            let frontierMod = if frontier then -0.5 else 0
-            
-            ants <- freeAntsRegion region       
-            return (fromIntegral (length ants) + visibleMod + frontierMod)
+    frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
+    let frontierMod = if frontier then -0.5 else 0
+    
+    ants <- freeAntsRegion region       
+    return (fromIntegral (length ants) + visibleMod + frontierMod)
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

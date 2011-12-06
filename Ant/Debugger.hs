@@ -36,7 +36,7 @@ time a = do
     v <- a
     end   <- getCPUTime
     let diff = (fromIntegral (end - start)) / (10^12)
-    printf "Computation time: %0.3f sec\n" (diff :: Double)
+    printf "Computation time: %0.3f sec\n" (diff :: Float)
     return v        
         {-
 main :: IO () 
@@ -122,15 +122,20 @@ renderInWindow win state = do
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
         
-        --renderMap (worldColour world) start end
+        renderMap (worldColour world) start end
         --renderMap (regionColours world (regionMap builder)) start end    
         
         
-        
+        {-
 
+        let (lower, upper) = (U.minimum diffused, U.maximum diffused)
+        let scale = 1.0 / (upper - lower)
         
+        let indexD p = scale * ((diffused `indexU` p) - lower)  
 
-        renderMap (regionColours' (diffused `indexU`) world (regionMap builder)) start end 
+        renderMap (regionColours' indexD world (regionMap builder)) start end 
+                -}
+        
         renderGraph (mapSize world) graph
                
         {-let (Just r) = M.lookup 8 (regions graph)
@@ -151,7 +156,7 @@ renderInWindow win state = do
         renderContent world start end 
         
         
-        let antSet = initialSet (map fst . fst . gsAnts $ stats)
+
         let found = runScheduler world stats graph antSet testSearch        
         renderPoints found
         
@@ -175,20 +180,20 @@ renderInWindow win state = do
 
         density' r = fromMaybe 0 (density r)
             
-        density :: RegionIndex -> Maybe Double
-        density r = Just (fromIntegral ourInf / 50.0)
+        density :: RegionIndex -> Maybe Float
+        density r = Just (ourInf / 2.0)
             where
                 (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` r
-                area = gsInfluenceArea stats
-        
-           
+
+        antSet = initialSet (map fst . fst . gsAnts $ stats)
+        diffGr = runScheduler world stats graph antSet diffuseAnts     
             
-        diffGr = diffusionGraph graph density       
-        diffused = (diffuse 1.2 diffGr) !! 200
+        --diffGr = diffusionGraph graph density       
+        --diffused = (diffuse 1.2 diffGr) !! 200
         
         
         
-squareSize :: Int -> Int -> Map -> Double
+squareSize :: Int -> Int -> Map -> Float
 squareSize width height world = min aspectW aspectH
     where
         (Size width' height') = mapSize world

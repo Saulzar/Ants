@@ -25,12 +25,12 @@ import Debug.Trace
 import qualified Data.IntMap as M
 
   
-setColour :: Colour Double -> Render ()
-setColour c =  setSourceRGB r g b where
+setColour :: Colour Float -> Render ()
+setColour c =  setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b) where
     (RGB r g b) = toSRGB c
 {-# INLINE setColour #-}
     
-squareColour :: Square -> Colour Double
+squareColour :: Square -> Colour Float
 squareColour square | not (wasSeen square) = black
                     | isVisible square     = squareColour'
                     | otherwise            = blend 0.5 black squareColour'
@@ -43,7 +43,7 @@ rectangle' :: Int -> Int -> Int -> Int -> Render ()
 rectangle' !x !y !w !h = rectangle (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)   
 {-# INLINE rectangle' #-}
   
-renderMap :: (Point -> Colour Double) -> Point -> Point -> Render ()
+renderMap :: (Point -> Colour Float) -> Point -> Point -> Render ()
 renderMap f (Point sx sy) (Point ex ey) = do
    setAntialias AntialiasNone
 
@@ -111,21 +111,21 @@ renderSquare sq p = do
     when (hasFood sq) $ drawFood p
 
     
-worldColour :: Map -> Point -> Colour Double
+worldColour :: Map -> Point -> Colour Float
 worldColour world p = squareColour (world `at` p)
 {-# INLINE worldColour #-}
 
-regionColourSet :: V.Vector (Colour Double)
+regionColourSet :: V.Vector (Colour Float)
 regionColourSet = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, brown, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
 
-regionColour ::  Int -> Colour Double
+regionColour ::  Int -> Colour Float
 regionColour i = regionColourSet `V.unsafeIndex` (i `mod` V.length regionColourSet)
 
-antColourSet :: V.Vector (Colour Double)
+antColourSet :: V.Vector (Colour Float)
 antColourSet = V.fromList [white, lightgreen, orange, darkturquoise, red, blue, lightsalmon, mediumpurple]
 
 
-antColour ::  Int -> Colour Double
+antColour ::  Int -> Colour Float
 antColour i = antColourSet `V.unsafeIndex` (i `mod` V.length antColourSet)
 
 
@@ -193,7 +193,7 @@ renderGraph worldSize graph = do
         
 
     
-mapColours :: Map -> Colour Double -> Point -> Colour Double
+mapColours :: Map -> Colour Float -> Point -> Colour Float
 mapColours world c p   | isWater square         = black
                        | otherwise              = c  
      where                   
@@ -202,7 +202,7 @@ mapColours world c p   | isWater square         = black
 
 
 
-regionColours :: Map -> RegionMap -> Point -> Colour Double
+regionColours :: Map -> RegionMap -> Point -> Colour Float
 regionColours world regionMap p = mapColours world colour p  
      where                    
         region = regionAt regionMap (mapSize world) p
@@ -213,7 +213,7 @@ regionColours world regionMap p = mapColours world colour p
 
 
 
-regionColours' :: (RegionIndex -> Double) -> Map -> RegionMap -> Point -> Colour Double
+regionColours' :: (RegionIndex -> Float) -> Map -> RegionMap -> Point -> Colour Float
 regionColours' lookupColor world regionMap p = mapColours world colour p  
      where                    
         region = regionAt regionMap (mapSize world) p
@@ -226,7 +226,7 @@ regionColours' lookupColor world regionMap p = mapColours world colour p
 
 
 
-passColours :: Map -> Passibility -> Point -> Colour Double
+passColours :: Map -> Passibility -> Point -> Colour Float
 passColours world pass p =  mapColours world colour p  
      where                   
         cost = pass `squareCost` p 
