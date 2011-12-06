@@ -202,6 +202,35 @@ gatherFood :: Scheduler ()
 gatherFood = do
     regions <- asks (grNodes . cGraph)
     mapM_ gatherFoodAt regions
+    
+    
+diffuseAnts :: Scheduler ()
+diffuseAnts =  do
+    regions <- asks (grNodes . cGraph)
+    mapM regionDensity regions
+    
+regionDensity :: RegionIndex -> Scheduler (Maybe Double)
+regionDensity region = do 
+    stats <- asks cStats 
+
+    let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
+    
+    if enemyInfluence > 2 
+        then return Nothing 
+        else density' stats
+        
+    where
+    
+        density' stats = do
+            
+            let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
+            let visibleMod = -0.1 * fromIntegral lastVisible
+
+            frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
+            let frontierMod = if frontier then -0.5 else 0
+            
+            ants <- freeAntsRegion region       
+            return (fromIntegral (length ants) + visibleMod + frontierMod)
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

@@ -173,12 +173,12 @@ renderInWindow win state = do
         fDist' r = (fromIntegral d / 120.0) where
             d = rsHillDistance (gsRegions stats `indexV` r)
 
-        density' p = fromMaybe 0 (density p)
+        density' r = fromMaybe 0 (density r)
             
         density :: RegionIndex -> Maybe Double
-        density p = Just (fromIntegral ourInf / 50.0)
+        density r = Just (fromIntegral ourInf / 50.0)
             where
-                (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` p
+                (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` r
                 area = gsInfluenceArea stats
         
            
