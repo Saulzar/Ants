@@ -191,12 +191,9 @@ assignFood ants  p = do
 gatherFoodAt :: RegionIndex -> Scheduler ()
 gatherFoodAt region = do
     food <- asks (rcFood . rsContent . (`gsRegion` region) . cStats)           
-    
-       
+           
     when (length food > 0) $ do          
-        -- Find some nearby ants 
-        traceShow (region, food) $ return ()
-        
+        -- Find some nearby ants        
         ants <- getAnts region (length food + 2) foodDistance                
         forM_ food (assignFood ants)
             
@@ -226,8 +223,15 @@ diffuseAnts =  do
     return ()
     
     
+
+    
 diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
-diffuseRegion = undefined    
+diffuseRegion flow density region = do
+    ants <- freeAntsRegion region
+    
+    let antDests = flowParticles flow density region ants
+    forM_ antDests $ \(ant, dest) ->  reserveAnt ant (Goto dest)
+    
     
 diffusableRegion :: RegionIndex -> Scheduler Bool
 diffusableRegion region = do 

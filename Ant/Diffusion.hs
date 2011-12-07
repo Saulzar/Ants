@@ -45,9 +45,12 @@ flowGraph graph passable = V.fromList $ map toNode [0.. grSize graph - 1] where
             toConnection (r, e)  = (r, fromIntegral (edgeConnectivity e), fromIntegral (edgeDistance e))
             nConnections   = U.fromList (map toConnection edges)
         
+nodeAssignments :: Int -> U.Vector Float -> Node -> U.Vector Int
+nodeAssignments n densities (Node connections _) = 
+
         
-flowParticles :: U.Vector Float -> FlowGraph -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
-flowParticles = error "Not implemented"
+flowParticles :: FlowGraph ->  U.Vector Float -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
+flowParticles flow densities region particles = error "Not implemented"
         
 
     
