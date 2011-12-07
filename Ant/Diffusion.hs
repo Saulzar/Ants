@@ -45,14 +45,30 @@ flowGraph graph passable = V.fromList $ map toNode [0.. grSize graph - 1] where
             toConnection (r, e)  = (r, fromIntegral (edgeConnectivity e), fromIntegral (edgeDistance e))
             nConnections   = U.fromList (map toConnection edges)
         
-nodeAssignments :: Int -> U.Vector Float -> Node -> U.Vector Int
-nodeAssignments n densities (Node connections _) = 
+nodeOutflows :: Int -> U.Vector Float -> RegionIndex -> Node -> Maybe U.Vector Float
+nodeAssignments n densities region (Node connections _)  | total > 0 = Just $ U.map ((* scale) .  fromIntegral) flows
+                                                         | otherwise = Nothing
+    where    
+        density     = densities `indexU` region
+        outFlow d  = max (density - d) 0
+        (neighbors, _, _) = U.unzip3 connections   
+
+        flows = U.map (outFlow . (densities `indexU`))
+        
+        total = U.sum flows 
+        scale = (fromIntegral n ) / total     
 
         
-flowParticles :: FlowGraph ->  U.Vector Float -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
-flowParticles flow densities region particles = error "Not implemented"
+flowParticles :: Size -> FlowGraph ->  U.Vector Float -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
+flowParticles worldSize flow densities region particles = flowParticles' maybeOutflows where 
+    maybeOutflows = nodeOutflows (length particles) densities region (flow `indexV` region) 
         
-
+    flowParticles' Nothing         = []
+    flowParticles' (Just outflows) =
+        
+        distance p out outflow = outflow * distance worldSize p out
+            
+        
     
 -- Gauss Sidel diffusion, approximately from
 -- http://www.dgp.toronto.edu/people/stam/reality/Research/pdf/GDC03.pdf

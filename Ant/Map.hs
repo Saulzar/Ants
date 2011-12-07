@@ -36,7 +36,8 @@ module Ant.Map
     , difference
     , distanceSqIndex
     , distanceSq
-    
+
+    , distance    
     , tileMap
     )
     
@@ -185,6 +186,11 @@ manhatten size p1 p2 | (Size dx dy) <- difference size p1 p2 = dx  + dy
 manhattenIndex :: Size -> Int -> Int -> Int
 manhattenIndex size p1 p2 = manhatten size (fromIndex size p1) (fromIndex size p2)  
 {-# INLINE manhattenIndex #-}    
+
+
+distance :: Size -> Point -> Point -> Float
+distance size p1 p2 = sqrt  (fromIntegral (distanceSq size p1 p2))
+{-# INLINE distance #-}      
 
 
 distanceSq :: Size -> Point -> Point -> Int
