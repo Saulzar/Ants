@@ -228,8 +228,9 @@ diffuseAnts =  do
 diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
 diffuseRegion flow density region = do
     ants <- freeAntsRegion region
+    size <- asks (mapSize . cWorld)
     
-    let antDests = flowParticles flow density region ants
+    let antDests = flowParticles size flow density region ants
     forM_ antDests $ \(ant, dest) ->  reserveAnt ant (Goto dest)
     
     

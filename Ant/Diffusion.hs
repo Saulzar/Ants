@@ -10,6 +10,7 @@ module Ant.Diffusion
 
 import Data.List
 import Data.Maybe
+import Data.Function
 
 import Ant.Map
 import Ant.Point
@@ -25,19 +26,32 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector as V
 
 type FlowGraph = V.Vector Node
+type Connection = (RegionIndex, Float, Float)
+
+cRegion :: Connection -> RegionIndex 
+cRegion (r, _, _) = r
+
+cDistance :: Connection -> Float
+cDistance (_, _, d) = d
+
+cConnectivity :: Connection -> Float
+cConnectivity (_, c, _) = c
 
 data Node = Node 
-    { nConnections :: U.Vector (RegionIndex, Float, Float)
+    { nConnections :: U.Vector Connection
+    , nCentre      :: !Point
     , nTotal       :: !Float
     }
 
 flowGraph :: Graph -> U.Vector Bool -> FlowGraph
 flowGraph graph passable = V.fromList $ map toNode [0.. grSize graph - 1] where
-    toNode r | not (isPassable r) = Node U.empty 0.0  
-             | otherwise        = Node nConnections (fromIntegral total)
+    toNode r | not (isPassable r) = Node U.empty centre 0.0  
+             | otherwise        = Node nConnections centre (fromIntegral total)
     
         where   
             isPassable = (passable `indexU`)
+            
+            centre = regionCentre (graph `grIndex` r)
             
             edges = filter (isPassable . fst) $ grEdges r graph
             total = sum . map (edgeConnectivity . snd) $ edges
@@ -45,29 +59,47 @@ flowGraph graph passable = V.fromList $ map toNode [0.. grSize graph - 1] where
             toConnection (r, e)  = (r, fromIntegral (edgeConnectivity e), fromIntegral (edgeDistance e))
             nConnections   = U.fromList (map toConnection edges)
         
-nodeOutflows :: Int -> U.Vector Float -> RegionIndex -> Node -> Maybe U.Vector Float
-nodeAssignments n densities region (Node connections _)  | total > 0 = Just $ U.map ((* scale) .  fromIntegral) flows
-                                                         | otherwise = Nothing
+nodeOutflows :: Int -> U.Vector Float -> RegionIndex -> Node -> [(Connection, Float)]
+nodeOutflows n densities region (Node connections _ _) = map (\(c, f) -> (c, scale * f)) flows
     where    
         density     = densities `indexU` region
-        outFlow d  = max (density - d) 0
-        (neighbors, _, _) = U.unzip3 connections   
 
-        flows = U.map (outFlow . (densities `indexU`))
+        difference c  = (c, density - (densities `indexU` cRegion c))
+        flows = filter ( (> 0) . snd) $ map difference (U.toList connections)
         
-        total = U.sum flows 
-        scale = (fromIntegral n ) / total     
+        total = sum (map snd flows)
+        scale = (fromIntegral n + 1) / total     
 
         
 flowParticles :: Size -> FlowGraph ->  U.Vector Float -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
-flowParticles worldSize flow densities region particles = flowParticles' maybeOutflows where 
-    maybeOutflows = nodeOutflows (length particles) densities region (flow `indexV` region) 
+flowParticles worldSize flowGraph densities region particles = flowParticles' outflows particles [] where 
+    outflows = nodeOutflows (length particles) densities region node
+    node = (flowGraph `indexV` region) 
+
+    -- Normalized distance, distance of particle divided by length of edge * flow rate
+    
+    heuristic :: Point -> (Connection, Float) -> ((Point, RegionIndex), Float)
+    heuristic p (c, f) = ((p, r), f * normDistance)
+        where
+            node' = flowGraph `indexV` region
+            r = cRegion c
+            normDistance = distance worldSize p (nCentre node') / cDistance c
         
-    flowParticles' Nothing         = []
-    flowParticles' (Just outflows) =
+    decFlows flows (p, r) | f > 1       =  (c, f - 1) : flows'
+                          | otherwise   =  flows'
+        where
+            (Just (c, f)) = find isRegion flows
+            flows' = filter (not . isRegion) flows
         
-        distance p out outflow = outflow * distance worldSize p out
-            
+            isRegion = (== r) . cRegion . fst
+             
+    flowParticles' :: [(Connection, Float)] -> [Point] -> [(Point, RegionIndex)] -> [(Point, RegionIndex)]
+    flowParticles' []     _       assigns = assigns
+    flowParticles' _     []       assigns = assigns
+    flowParticles' flows (p : ps) assigns = flowParticles' flows' ps (assign : assigns) where
+        
+        (assign, _) = maximumBy (compare `on` snd) (map (heuristic p) flows)
+        flows'      = decFlows flows assign
         
     
 -- Gauss Sidel diffusion, approximately from
@@ -80,5 +112,5 @@ diffuse rate flow density0 = iterate diffuse' density0
         diffuseNode density' i d = (d + rate * weighted) / (1.0 + rate * total) where       
             weight (r, w, _) = (density' `indexU` r) * w
             weighted = (U.sum . U.map weight) conn
-            (Node conn total) = flow `indexV` i
+            (Node conn _ total) = flow `indexV` i
             
