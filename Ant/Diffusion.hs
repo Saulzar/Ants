@@ -12,6 +12,8 @@ import Data.List
 import Data.Maybe
 import Data.Function
 
+import Debug.Trace
+
 import Ant.Map
 import Ant.Point
 import Ant.RegionBuilder
@@ -60,7 +62,7 @@ flowGraph graph passable = V.fromList $ map toNode [0.. grSize graph - 1] where
             nConnections   = U.fromList (map toConnection edges)
         
 nodeOutflows :: Int -> U.Vector Float -> RegionIndex -> Node -> [(Connection, Float)]
-nodeOutflows n densities region (Node connections _ _) = map (\(c, f) -> (c, scale * f)) flows
+nodeOutflows n densities region (Node connections _ _) = map scaleFlow flows
     where    
         density     = densities `indexU` region
 
@@ -70,6 +72,7 @@ nodeOutflows n densities region (Node connections _ _) = map (\(c, f) -> (c, sca
         total = sum (map snd flows)
         scale = (fromIntegral n + 1) / total     
 
+        scaleFlow (c, f) = (c, scale * f)
         
 flowParticles :: Size -> FlowGraph ->  U.Vector Float -> RegionIndex -> [Point] -> [(Point, RegionIndex)]
 flowParticles worldSize flowGraph densities region particles = flowParticles' outflows particles [] where 
@@ -79,14 +82,16 @@ flowParticles worldSize flowGraph densities region particles = flowParticles' ou
     -- Normalized distance, distance of particle divided by length of edge * flow rate
     
     heuristic :: Point -> (Connection, Float) -> ((Point, RegionIndex), Float)
-    heuristic p (c, f) = ((p, r), f * normDistance)
+    heuristic p (c, f) = ((p, r), f * capacity * normDistance)
         where
             node' = flowGraph `indexV` region
+            capacity = cConnectivity c / nTotal node 
+            
             r = cRegion c
             normDistance = distance worldSize p (nCentre node') / cDistance c
         
-    decFlows flows (p, r) | f > 1       =  (c, f - 1) : flows'
-                          | otherwise   =  flows'
+    decFlows flows r | f > 1       =  (c, f - 1) : flows'
+                     | otherwise   =  flows'
         where
             (Just (c, f)) = find isRegion flows
             flows' = filter (not . isRegion) flows
@@ -96,10 +101,13 @@ flowParticles worldSize flowGraph densities region particles = flowParticles' ou
     flowParticles' :: [(Connection, Float)] -> [Point] -> [(Point, RegionIndex)] -> [(Point, RegionIndex)]
     flowParticles' []     _       assigns = assigns
     flowParticles' _     []       assigns = assigns
-    flowParticles' flows (p : ps) assigns = flowParticles' flows' ps (assign : assigns) where
+    flowParticles' flows ps assigns = flowParticles' flows' ps' ((best, r) : assigns) where
         
-        (assign, _) = maximumBy (compare `on` snd) (map (heuristic p) flows)
-        flows'      = decFlows flows assign
+        ((best, r), _) = maximumBy (compare `on` snd) [heuristic p flow | flow <- flows, p <- ps]
+        flows'      = decFlows flows r
+        ps'         = filter (/= best) ps
+        
+        
         
     
 -- Gauss Sidel diffusion, approximately from
@@ -113,4 +121,7 @@ diffuse rate flow density0 = iterate diffuse' density0
             weight (r, w, _) = (density' `indexU` r) * w
             weighted = (U.sum . U.map weight) conn
             (Node conn _ total) = flow `indexV` i
+            
+            
+
             

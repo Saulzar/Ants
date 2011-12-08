@@ -10,14 +10,14 @@ module Ant.IO
     , readSettings
     , gameLoop
     , defaultSettings
-	
-	, playerAnt     
-	, playerHill 
-	
-	, containsAnt
+
+    , playerAnt     
+    , playerHill 
+
+    , containsAnt
     , containsDeadAnt
-	, containsHill
-	, containsFood
+    , containsHill
+    , containsFood
     , containsWater
     )
     

@@ -13,6 +13,7 @@ module Ant.Game
      , module Ant.Passibility
      , module Ant.RegionStats
      , module Ant.Graph
+     , module Ant.Scheduler
      
      )
     where

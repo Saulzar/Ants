@@ -1,10 +1,14 @@
 {-# LANGUAGE PatternGuards, ScopedTypeVariables #-}
 
 module Ant.Scheduler 
-    ( runScheduler
+    ( scheduleAnts
     , initialSet
     , testSearch
     , diffuseAnts
+    
+    , AntSet
+    , Task (..)
+    
     )
 where
 
@@ -34,12 +38,15 @@ import qualified Data.Vector.Unboxed as U
 
 type AntSet = M.Map Point Task
 
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving Eq
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
 
-runScheduler :: Map -> GameStats -> Graph -> AntSet -> Scheduler a -> a
-runScheduler world stats graph ants action = runReader (evalStateT action ants) ctx
-    where ctx = (Context world stats graph)
-
+scheduleAnts :: Map -> GameStats -> Graph -> [Point] -> AntSet
+scheduleAnts world stats graph ants = runReader (execStateT schedule antSet) ctx
+    where 
+        ctx = (Context world stats graph)
+        schedule = gatherFood >> diffuseAnts
+        antSet = initialSet ants
+    
     
 initialSet :: [Point] -> AntSet 
 initialSet ants = M.fromList (zip ants (repeat Unassigned))          
@@ -178,7 +185,7 @@ foodDistance :: Distance
 foodDistance = 40
 
 assignFood :: [Point] -> Point -> Scheduler ()
-assignFood []    _  = traceShow "None" $ return ()
+assignFood []    _  = return ()
 assignFood ants  p = do
     size <- asks (mapSize . cWorld)
     ants' <- freeAnts ants
@@ -239,7 +246,7 @@ diffusableRegion region = do
     stats <- asks cStats 
 
     let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
-    return (enemyInfluence > 2) 
+    return (enemyInfluence < 2) 
                 
         
 regionDensity :: RegionIndex -> Scheduler Float
@@ -248,8 +255,6 @@ regionDensity region = do
             
     let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
     let visibleMod = max (-0.1 * fromIntegral lastVisible) (-1.0)
-    
-    traceShow (region, lastVisible) $ return ()
 
     frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
     let frontierMod = if frontier then -0.5 else 0

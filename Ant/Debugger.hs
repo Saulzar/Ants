@@ -101,8 +101,6 @@ renderInWindow :: DrawableClass drawable => drawable -> GameState -> IO ()
 renderInWindow win state = do 
     (width, height) <- drawableGetSize win
     
-    traceShow "Here3" $ return ()
-    
     let s = fromIntegral $ round $ max 1.0 (0.9 * squareSize width height world)
 
     let vw = ceiling (fromIntegral width / s)
@@ -122,8 +120,8 @@ renderInWindow win state = do
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
         
-        renderMap (worldColour world) start end
-        --renderMap (regionColours world (regionMap builder)) start end    
+        --renderMap (worldColour world) start end
+        renderMap (regionColours world (regionMap builder)) start end    
         
         
         {-
@@ -136,7 +134,7 @@ renderInWindow win state = do
         renderMap (regionColours' indexD world (regionMap builder)) start end 
                 -}
         
-        renderGraph (mapSize world) graph
+        --renderGraph (mapSize world) graph
                
         {-let (Just r) = M.lookup 8 (regions graph)
     
@@ -157,9 +155,8 @@ renderInWindow win state = do
         
         
 
-        let found = runScheduler world stats graph antSet testSearch        
-        renderPoints found
-        
+        let found = scheduleAnts world stats graph ants        
+        renderTasks graph found
         
 
         
@@ -185,8 +182,9 @@ renderInWindow win state = do
             where
                 (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` r
 
-        antSet = initialSet (map fst . fst . gsAnts $ stats)
-        diffGr = runScheduler world stats graph antSet diffuseAnts     
+        ants = map fst . fst . gsAnts $ stats
+        
+        -- diffGr = runScheduler world stats graph antSet diffuseAnts     
             
         --diffGr = diffusionGraph graph density       
         --diffused = (diffuse 1.2 diffGr) !! 200

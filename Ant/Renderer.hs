@@ -24,6 +24,8 @@ import qualified Data.Vector as V
 import Debug.Trace
 import qualified Data.IntMap as M
 
+import qualified Data.Map as MM
+
   
 setColour :: Colour Float -> Render ()
 setColour c =  setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b) where
@@ -99,14 +101,33 @@ renderPoints ps = do
         drawCircle p 0.5
         fill  
  
+ -- data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving Eq
+ 
+renderTasks :: Graph -> AntSet -> Render ()
+renderTasks graph ants = do 
+
+    setLineWidth 0.2
+    forM_ (MM.toList ants) $ renderTask
+    
+    where
+        
+        renderTask (p, Goto r) = setColour lightblue >> drawLine p p' >> drawAnt p
+            where p' = regionCentre (graph `grIndex` r)
+            
+        renderTask (p, Gather food) = setColour lightgreen >> drawLine p food >> drawAnt p
+        renderTask (p, _) = setColour gray >> drawAnt p
+ 
+ 
+        drawAnt p = drawCircle p 0.5 >> fill
+ 
 renderSquare :: Square -> Point  -> Render ()
 renderSquare sq p = do
     
     whenMaybe (squareHill sq) $ \player ->
         drawHill player p
         
-    whenMaybe (squareAnt sq) $ \player ->
-        drawAnt player p
+--    whenMaybe (squareAnt sq) $ \player ->
+--        drawAnt player p
     
     when (hasFood sq) $ drawFood p
 
@@ -119,7 +140,7 @@ regionColourSet :: V.Vector (Colour Float)
 regionColourSet = V.fromList [lightsalmon, lightseagreen, cornflowerblue, brown, pink, cadetblue, olive, brown, moccasin, darkkhaki, cornsilk, lightsteelblue, darkgoldenrod, azure]
 
 regionColour ::  Int -> Colour Float
-regionColour i = regionColourSet `V.unsafeIndex` (i `mod` V.length regionColourSet)
+regionColour i = blend 0.5 black $ regionColourSet `V.unsafeIndex` (i `mod` V.length regionColourSet)
 
 antColourSet :: V.Vector (Colour Float)
 antColourSet = V.fromList [white, lightgreen, orange, darkturquoise, red, blue, lightsalmon, mediumpurple]
@@ -139,15 +160,16 @@ drawCircle (Point x y) r = arc (fromIntegral x) (fromIntegral y) r 0 (pi * 2.0)
 {-# INLINE drawCircle #-}
 
 drawLine :: Point -> Point -> Render ()
-drawLine (Point x y) (Point x' y') = do 
+drawLine (Point x y) (Point x' y') =  do 
     moveTo (fromIntegral x) (fromIntegral y)
     lineTo (fromIntegral x') (fromIntegral y')
-
+    stroke
+    
 drawLine' :: Point -> Size -> Render ()
 drawLine' (Point x y) (Size dx dy) = do 
     moveTo (fromIntegral x) (fromIntegral y)
     lineTo (fromIntegral (x + dx)) (fromIntegral (y + dy))
-    
+    stroke
     
 wrapDiff :: Size -> Point -> Point -> Size
 wrapDiff (Size width height) (Point x1 y1) (Point x2 y2) = Size (wrap x1 x2 width) (wrap y1 y2 height)
@@ -178,7 +200,6 @@ renderGraph worldSize graph = do
             let d = wrapDiff worldSize  (regionCentre r)  (regionCentre r')
           
             drawLine' (regionCentre r) d
-            stroke
             
     setFontSize 1.0
    
