@@ -22,6 +22,7 @@ import Ant.Vector
 
 import Ant.Graph
 
+
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 

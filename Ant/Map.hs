@@ -21,6 +21,8 @@ module Ant.Map
     
     , at
     , wrapIndex
+	, wrapPoint
+	
     , fromFunction
     
     , atIndex   
@@ -158,7 +160,10 @@ findSquareBy world f origin size =  fmap (fromIndex (mapSize world)) (find f' in
         f' i = f (world `atIndex` i)
         indices = rectIndices (mapSize world) origin size
 
-    
+wrapPoint :: Size -> Point -> Point    
+wrapPoint (Size width height) (Point x y) =  Point (x `mod` width) (y `mod` height)
+{-# INLINE wrapPoint #-}
+	
 wrapIndex :: Size -> Point -> Int
 wrapIndex (Size width height) (Point x y) = (y `mod` height) * width + x `mod` width
 {-# INLINE wrapIndex #-}
@@ -204,7 +209,7 @@ distanceSqIndex size p1 p2 = distanceSq size (fromIndex size p1) (fromIndex size
 
 distanceIndex :: Size -> Int -> Int -> Float
 distanceIndex size p1 p2 = sqrt  (fromIntegral (distanceSqIndex size p1 p2))
-{-# INLINE distanceSqIndex #-}  
+{-# INLINE distanceIndex #-}  
 
     
 neighborIndices :: Size -> Int -> [Int]

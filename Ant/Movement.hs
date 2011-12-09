@@ -1,4 +1,8 @@
-module Movement where
+module Ant.Movement 
+	( moveAnts
+	
+	)
+	where
 
 import Data.List
 import Data.Maybe
@@ -9,19 +13,20 @@ import Debug.Trace
 import Control.Monad.RWS.Strict
 
 import Ant.Map
+import Ant.Square
 import Ant.Point
-import Ant.Search
 import Ant.Vector
 import Ant.Graph
 import Ant.Scheduler
 import Ant.IO
+import Ant.RegionBuilder
+import Ant.RegionStats
+import Ant.Search
 
 import qualified Data.IntSet as S
 
-type SquareSet = S.IntSet 
-    
+type SquareSet = S.IntSet   
 type Move = RWS Context [Order] SquareSet
-type PathNode = SearchNode Point
 
 data Context = Context 
     { cWorld :: Map
@@ -31,46 +36,125 @@ data Context = Context
     }
     
 moveAnts :: RegionMap -> Map -> GameStats -> Graph -> AntSet -> [Order]
-moveAnts regions world stats graph ants = orders 
+moveAnts regionMap world stats graph ants = orders 
     where 
-        ctx = (Context world stats graph regions)
-        (_, orders) = evalRWS ctx S.empty (moveAnts' ants)
+        ctx = (Context world stats graph regionMap)
+        (_, orders) = evalRWS (moveAnts' ants) ctx S.empty 
 
 
 
-succ ::  Map -> SquareSet -> SearchNode -> [SearchNode]
-succ world occupied sn@(SearchNode i d prev) = toNode . filter valid $ neighbors
+successor ::  Map -> SquareSet -> SearchNode -> [SearchNode]
+successor world occupied sn@(SearchNode p d prev) = map toNode . filter valid $ neighbors
     where
-        neighbors = neighborIndices (mapSize world) i
-        valid i' = isLand (world `atIndex` i')           -- Land and not water (and we've seen it before)
-               && (d > 0 || S.notMember i' occupied)     -- Immediate neighbor is taken (avoid collisions)
+        neighbors = neighborIndices (mapSize world) p
+        valid p' = isLand (world `atIndex` p')           -- Land and not water (and we've seen it before)
+               && (d > 0 || S.notMember p' occupied)     -- Immediate neighbor is taken (avoid collisions)
                
-        toNode i' = SearchNode i' (d + 1) sn
+        toNode p' = SearchNode p' (d + 1) (Just sn)
+{-# INLINE successor #-}
         
 -- For A-star
 metric :: Size -> Point -> SearchNode -> Float
 metric size p = metric' where
-    i = size `wrapIndex` p
-    metric' (SearchNode i' d _) = (fromIntegral d) + distanceIndex size i i'
+    index = size `wrapIndex` p
+    metric' (SearchNode index' d _) = (fromIntegral d) + distanceIndex size index index'
+{-# INLINE metric #-}        
         
-        
-inRegion :: RegionIndex -> Size -> RegionMap -> Int -> Bool
-inRegion r size regionMap p = r == (regionMap `indexU` index)
+nodeRegion :: RegionMap -> SearchNode -> RegionIndex
+nodeRegion regionMap = fst . (regionMap `indexU`) . snKey
+{-# INLINE nodeRegion #-}
 
+   
+
+
+isFree :: Point -> Move Bool
+isFree p = do
+	size <- asks (mapSize . cWorld)
+
+	notTaken <- gets (S.notMember (size `wrapIndex`  p))
+	land 	 <- asks (isLand . (`at` p) .  cWorld)
+	
+	return (notTaken && land) 
+{-# INLINE isFree #-}
+
+occupy :: Point -> Move ()
+occupy p = do
+	size <- asks (mapSize . cWorld)
+	modify (S.insert (size `wrapIndex`  p))
+{-# INLINE occupy #-}
+
+
+	
+allMoves :: Point -> Move [(Point, Maybe Direction)]
+allMoves (Point x y) = do
+	size <- asks (mapSize . cWorld)
+	
+	let order p dir = (wrapPoint size p, dir)
+	return $ 	[ order (Point (x - 1) y) (Just West)
+				, order (Point (x + 1) y) (Just East)
+				, order (Point x (y + 1)) (Just North)
+				, order (Point x (y - 1)) (Just South)
+				, order (Point x y) Nothing
+				]
+
+		
+order :: Point -> Maybe Direction -> Move ()
+order p Nothing 	= occupy p 						-- Mark square as occupied but don't send a move
+order p (Just dir) 	= occupy p >> tell [(p, dir)]		-- Mark as occupied and send move
+	
+anyMove ::  Point -> Move ()
+anyMove p = allMoves p >>= move' 
+	where 
+		move' [] = return ()  -- Ouch, no valid moves
+		move' ((p', dir) : ms) = do
+			free <- isFree p'
+			if free then order p dir else move' ms
+
+moveTo :: Point -> Point -> Move ()
+moveTo p p' = do
+	moves <- allMoves p
+	case lookup p' moves of 
+		(Just dir) -> order p dir
+		Nothing    -> error "Move square not adjacent to source"
+			
+makeMove :: Point -> Maybe SearchNode -> Move ()
+makeMove p Nothing = anyMove p
+makeMove p (Just sn) = makeMove' (searchPath sn)
+	where 
+		makeMove' (curr : next : _) = do
+			size <- asks (mapSize . cWorld)
+			let p' = fromIndex size next
+			moveTo p p'
+			
+		makeMove' _ = anyMove p  -- We're at the destination already, do something
+	
+	
 searchLimit :: Int
-searchLimit = 100    
-    
-pathFind :: Point -> RegionIndex -> Move (Maybe SearchNode)
-pathFind p r = do
-    dest <- asks (regionCentre . (`grIndex` r) . cGraph)
-    world <- asks cWord
-    regionMap <- asks cRegions
-    occupied <- get    
+searchLimit = 100 
 
-    let searchMetric = metric (mapSize world) dest 
-    let result = search (succ world occupied) searchMetric (mapSize world `wrapIndex` p)
-    
-    return $ find (reachedRegion . snKey) (take searchLimit result)
+findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
+findDest f = find f . take searchLimit 
+
+pathToPoint :: Point -> Point -> Move (Maybe SearchNode)
+pathToPoint source dest = do
+	nodes <- pathFind source dest 
+	size <- asks (mapSize . cWorld)
+	
+	return $ findDest ((== dest) . fromIndex size . snKey) $ nodes
+	
+pathToRegion ::  Point -> RegionIndex -> Move (Maybe SearchNode)
+pathToRegion source region = do
+	regionMap <- asks cRegions
+	dest <- asks (regionCentre . (`grIndex` region) . cGraph)
+	nodes <- pathFind source dest 
+	
+	return $ findDest ((== region) . nodeRegion regionMap)  $ nodes
+	
+pathFind :: Point -> Point -> Move [SearchNode]
+pathFind source dest = do
+    world <- asks cWorld
+    occupied <- get    
+    return $ search (successor world occupied) (metric (mapSize world) dest)  (mapSize world `wrapIndex` source)
     
     
 moveAnts' :: AntSet -> Move ()

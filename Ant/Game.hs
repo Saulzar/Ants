@@ -14,6 +14,7 @@ module Ant.Game
      , module Ant.RegionStats
      , module Ant.Graph
      , module Ant.Scheduler
+	 , module Ant.Movement
      
      )
     where
@@ -33,6 +34,7 @@ import Ant.Passibility
 import Ant.RegionStats
 import Ant.Graph
 import Ant.Scheduler
+import Ant.Movement
 
 import System.Random
 import Debug.Trace

@@ -2,6 +2,7 @@
 
 module Ant.Scheduler 
     ( scheduleAnts
+	, runScheduler
     , initialSet
     , testSearch
     , diffuseAnts
@@ -47,6 +48,12 @@ scheduleAnts world stats graph ants = runReader (execStateT schedule antSet) ctx
         schedule = gatherFood >> diffuseAnts
         antSet = initialSet ants
     
+runScheduler :: Map -> GameStats -> Graph -> [Point] -> Scheduler a -> a
+runScheduler world stats graph ants schedule = runReader (evalStateT schedule antSet) ctx
+    where 
+        ctx = (Context world stats graph)
+        antSet = initialSet ants	
+	
     
 initialSet :: [Point] -> AntSet 
 initialSet ants = M.fromList (zip ants (repeat Unassigned))          
