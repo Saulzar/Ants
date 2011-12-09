@@ -36,6 +36,7 @@ module Ant.Map
     , difference
     , distanceSqIndex
     , distanceSq
+    , distanceIndex
 
     , distance    
     , tileMap
@@ -199,6 +200,10 @@ distanceSq size p1 p2 | (Size dx dy) <- difference size p1 p2 = dx * dx  + dy * 
     
 distanceSqIndex :: Size -> Int -> Int -> Int
 distanceSqIndex size p1 p2 = distanceSq size (fromIndex size p1) (fromIndex size p2)  
+{-# INLINE distanceSqIndex #-}  
+
+distanceIndex :: Size -> Int -> Int -> Float
+distanceIndex size p1 p2 = sqrt  (fromIntegral (distanceSqIndex size p1 p2))
 {-# INLINE distanceSqIndex #-}  
 
     

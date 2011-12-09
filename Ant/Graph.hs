@@ -16,7 +16,6 @@ module Ant.Graph
     
     , grBFS
     , grAStar
-    , grPath
     
     , grSucc
     , grTest
@@ -91,11 +90,6 @@ edgeDistances :: Graph -> SearchNode -> [SearchNode]
 edgeDistances graph node@(SearchNode r d _) = map toNode (grEdges r graph)
     where toNode (r', e) = SearchNode r' (edgeDistance e + d) (Just node)
 {-# INLINE edgeDistances #-}
-
-grPath :: SearchNode -> [RegionIndex]
-grPath sn = path sn [] where
-    path (SearchNode r _ Nothing)  xs = r : xs
-    path (SearchNode r _ (Just p)) xs = path p (r : xs)
 
 
 grBFS :: Graph -> RegionIndex -> [SearchNode]
