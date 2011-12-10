@@ -115,11 +115,12 @@ initialStats = GameStats
     }
     
     
-hills :: Map -> [SquareContent] -> S.Set (Point, Player) -> S.Set (Point, Player)
-hills world content hills = S.filter hillExists $ foldr S.insert hills visibleHills
+updateHillSet :: Map -> [SquareContent] -> S.Set (Point, Player) -> S.Set (Point, Player)
+updateHillSet world content hills = S.filter hillExists $ foldr S.insert hills visibleHills
         where
                 visibleHills = map (\(p, Hill n) -> (p, n)) . filter (containsHill . snd) $ content
                 hillExists (p, _) = isHill (world `at` p)  
+				
         
 growRegions :: Int -> V.Vector RegionStats -> V.Vector RegionStats
 growRegions numRegions v = growRegions' newRegions	
@@ -153,7 +154,7 @@ updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> 
 updateStats world graph regionMap vis content stats = stats
         { gsRegions = regionStats'
         , gsFightRecord = updateFightRecords regionStats' (gsFightRecord stats)
-        , gsHills = hills'
+        , gsHills = hills
         , gsAnts  = (ourAnts, enemyAnts)
         , gsInfluenceMap    = influence
         , gsRegionInfluence = regionInfluence
@@ -162,11 +163,11 @@ updateStats world graph regionMap vis content stats = stats
         where
 
             regionVisibility' = regionVisibility numRegions regionMap vis  
-            hills'    = hills world content (gsHills stats)
+            hills    = updateHillSet world content (gsHills stats)
             
             getRegion      = regionAt regionMap size
             
-            hillRegions     = filter ( /= invalidRegion) . map getRegion . map fst . S.toList $ hills'
+            hillRegions     = filter ( /= invalidRegion) . map getRegion . map fst . filter ((==0) .  snd) . S.toList $ hills
             regionDistances = hillDistances graph hillRegions
             
             -- Remember content we can't see

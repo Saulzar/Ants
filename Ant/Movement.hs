@@ -23,6 +23,8 @@ import Ant.RegionBuilder
 import Ant.RegionStats
 import Ant.Search
 
+import Debug.Trace
+
 import qualified Data.IntSet as S
 
 type SquareSet = S.IntSet   
@@ -35,7 +37,7 @@ data Context = Context
     , cRegions :: RegionMap
     }
     
-moveAnts :: RegionMap -> Map -> GameStats -> Graph -> AntSet -> [Order]
+moveAnts :: RegionMap -> Map -> GameStats -> Graph -> [AntTask] -> [Order]
 moveAnts regionMap world stats graph ants = orders 
     where 
         ctx = (Context world stats graph regionMap)
@@ -78,7 +80,7 @@ isFree p = do
 {-# INLINE isFree #-}
 
 occupy :: Point -> Move ()
-occupy p = do
+occupy p =  do
 	size <- asks (mapSize . cWorld)
 	modify (S.insert (size `wrapIndex`  p))
 {-# INLINE occupy #-}
@@ -118,10 +120,10 @@ moveTo p p' = do
 		Nothing    -> error "Move square not adjacent to source"
 			
 makeMove :: Point -> Maybe SearchNode -> Move ()
-makeMove p Nothing = anyMove p
+makeMove p Nothing   = anyMove p
 makeMove p (Just sn) = makeMove' (searchPath sn)
 	where 
-		makeMove' (curr : next : _) = do
+		makeMove' (_ : next : _) = do
 			size <- asks (mapSize . cWorld)
 			let p' = fromIndex size next
 			moveTo p p'
@@ -130,7 +132,7 @@ makeMove p (Just sn) = makeMove' (searchPath sn)
 	
 	
 searchLimit :: Int
-searchLimit = 100 
+searchLimit = 1000
 
 findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
 findDest f = find f . take searchLimit 
@@ -156,7 +158,14 @@ pathFind source dest = do
     occupied <- get    
     return $ search (successor world occupied) (metric (mapSize world) dest)  (mapSize world `wrapIndex` source)
     
+	
+moveAnt :: Point -> Task -> Move ()
+moveAnt p (Goto r) 		= pathToRegion p r >>= makeMove p
+moveAnt p (Gather p')   = pathToPoint p p' >>= makeMove p
+moveAnt p _ = anyMove p
+
     
-moveAnts' :: AntSet -> Move ()
-moveAnts' ants = do
-    return ()
+moveAnts' :: [AntTask] -> Move ()
+moveAnts' ants = forM_ ants (uncurry moveAnt)
+	
+    

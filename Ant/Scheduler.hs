@@ -9,6 +9,7 @@ module Ant.Scheduler
     
     , AntSet
     , Task (..)
+	, AntTask
     
     )
 where
@@ -38,11 +39,12 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 
 type AntSet = M.Map Point Task
+type AntTask = (Point, Task)
 
 data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
 
-scheduleAnts :: Map -> GameStats -> Graph -> [Point] -> AntSet
-scheduleAnts world stats graph ants = runReader (execStateT schedule antSet) ctx
+scheduleAnts :: Map -> GameStats -> Graph -> [Point] -> [AntTask]
+scheduleAnts world stats graph ants = M.toList $ runReader (execStateT schedule antSet) ctx
     where 
         ctx = (Context world stats graph)
         schedule = gatherFood >> diffuseAnts
@@ -192,13 +194,13 @@ foodDistance :: Distance
 foodDistance = 40
 
 assignFood :: [Point] -> Point -> Scheduler ()
-assignFood []    _  = return ()
 assignFood ants  p = do
-    size <- asks (mapSize . cWorld)
-    ants' <- freeAnts ants
-    
-    let ant = minimumBy (compare `on` manhatten size p) ants'
-    reserveAnt ant (Gather p)
+	size <- asks (mapSize . cWorld)
+	ants' <- freeAnts ants
+
+	when (not . null $ ants') $ do
+		let ant = minimumBy (compare `on` manhatten size p) ants'
+		reserveAnt ant (Gather p)
     
     --traceShow ant $ return ()
 

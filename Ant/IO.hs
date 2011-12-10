@@ -103,7 +103,7 @@ containsWater Water  = True
 containsWater _     = False  
 			 
 orderString :: Order -> String
-orderString (Point x y, dir) = "o " ++ (show x) ++ " " ++ (show y) ++ " " ++ (dirString dir)
+orderString (Point c r, dir) = "o " ++ (show r) ++ " " ++ (show c) ++ " " ++ (dirString dir)
     where
         dirString North = "N"
         dirString East  = "E"

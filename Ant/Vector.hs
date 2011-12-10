@@ -8,6 +8,7 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
+#define DEBUG
 
 #ifndef DEBUG
 

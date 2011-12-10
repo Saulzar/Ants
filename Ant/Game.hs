@@ -85,51 +85,56 @@ modifyMap f = modify $ \state -> state { gameMap = f (gameMap state) }
 modifyPass :: (Passibility -> Passibility) -> Game ()
 modifyPass f = modify $ \state -> state { gamePass = f (gamePass state) }
 
-updateState :: [SquareContent] -> Game ()
+updateState :: [SquareContent] -> Game [Order]
 updateState content = do
         
-    let ants = contentSquares (playerAnt 0) content
-    
-    world <- gets gameMap
-    radiusSq <- getSetting viewRadius2
+	-- Update visibility and get changes in visibility
+	world <- gets gameMap
+	radiusSq <- getSetting viewRadius2
 
-    let vis = visibleSet (mapSize world) radiusSq ants
-    let dVis = newlyVisible vis world
+	let ants = contentSquares (playerAnt 0) content
+	let vis = visibleSet (mapSize world) radiusSq ants
+	let dVis = newlyVisible vis world
 
-    n <- gets (numRegions . gameBuilder)
-    when (n == 0) $ modifyBuilder (initRegions content) 
-    
-    let world' = (updateContent content . updateVisibility vis) world
+	-- Initialise regions to start at the hills (first turn only)
+	n <- gets (numRegions . gameBuilder)
+	when (n == 0) $ modifyBuilder (initRegions content) 
 
-    pass <- gets gamePass 
-    let pass' = updatePassibility dVis world' pass
+	let world' = (updateContent content . updateVisibility vis) world
 
-    builder <- gets gameBuilder
-    let builder' = updateBuilder pass' world' builder
+	pass <- gets gamePass 
+	let pass' = updatePassibility dVis world' pass
 
-    stats <- gets gameStats
+	builder <- gets gameBuilder
+	let builder' = updateBuilder pass' world' builder
+
+	stats <- gets gameStats
+
+	let graph = grCreate (regions builder')
+	let content' = filter (not . containsWater . snd) content
+
+	let stats' = updateStats world' graph (regionMap builder') vis content' stats
+	let antTasks = scheduleAnts world stats' graph ants
+	liftIO $ print antTasks
 	
-    let graph = grCreate (regions builder')
-    let content' = filter (not . containsWater . snd) content
-    
-    let stats' = updateStats world' graph (regionMap builder') vis content' stats
+	let moves = moveAnts (regionMap builder') world stats graph antTasks
+		
 
+	stats `seq` modify $ \gameState -> gameState 
+		{ gameMap = world'
+		, gamePass = pass'
+		, gameBuilder = builder'
+		, gameStats = stats'
+		, gameGraph = graph
+		}
 
-    stats `seq` modify $ \gameState -> gameState 
-        { gameMap = world'
-        , gamePass = pass'
-        , gameBuilder = builder'
-    	, gameStats = stats'
-        , gameGraph = graph
-        }
-
-    
+	return moves
+	
 processTurn :: Int -> [SquareContent] -> Game [Order]
 processTurn n content = do
-    liftIO $ putStrLn $ "Processing turn: " ++ (show n) ++ "...\n"
     
-    updateState content
-    return []
+    orders <- updateState content
+    return orders
     
     --orders <- liftM (map toEnum . randomRs (0, 3)) (liftIO getStdGen)
     --return $ zip (map fst ants) orders

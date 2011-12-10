@@ -36,8 +36,9 @@ instance Ord (SearchNode) where
     compare sn sn' = snKey sn `compare` snKey sn'
     
 searchPath :: SearchNode -> [Int]
-searchPath (SearchNode r _ Nothing)   = []
-searchPath (SearchNode r _ (Just p))  = r : searchPath p
+searchPath = (`path` []) where
+	path (SearchNode r _ Nothing)  xs = r : xs
+	path (SearchNode r _ (Just p)) xs = path p (r : xs)
 
 insertMin :: (Ord m) => SearchNode -> m -> Queue m -> Queue m
 insertMin node p = Q.alter alter node where

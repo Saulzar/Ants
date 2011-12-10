@@ -71,7 +71,6 @@ main = do
     print settings
     
     state <- runGame (initialState settings) 
-    print (gameStats state)
     
         
     stateVar <- newMVar state
@@ -155,8 +154,8 @@ renderInWindow win state = do
         
         
 
-        let found = scheduleAnts world stats graph ants        
-        renderTasks graph found
+       -- let found = scheduleAnts world stats graph ants        
+       -- renderTasks graph found
         
 
         
