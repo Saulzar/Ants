@@ -80,7 +80,7 @@ Executable Ants
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
 
- 
+  
 Executable Debugger
   -- .hs or .lhs file containing the Main module.
   Main-is: Ant/Debugger.hs             
