@@ -159,7 +159,10 @@ renderInWindow win state = do
         traceShow found $ return ()
         renderTasks (mapSize world) graph found
         
-
+        
+        let paths = antPaths (regionMap builder) world stats graph found
+        renderPoints (concat paths)
+        
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)

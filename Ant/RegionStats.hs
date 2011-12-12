@@ -186,7 +186,7 @@ updateStats world graph regionMap vis content stats = stats
             influence = U.zip (infl ourAnts) (infl enemyAnts)
             regionInfluence = sumRegionInfluence influenceScale numRegions regionMap influence
             
-            infl ants = influenceCount size distSq (map fst ants)
+            infl ants = influenceCount 1 size distSq (map fst ants)
 
             size = mapSize world
             distSq = 15

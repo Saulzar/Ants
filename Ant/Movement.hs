@@ -1,5 +1,6 @@
 module Ant.Movement 
 	( moveAnts
+	, antPaths
 	
 	)
 	where
@@ -43,7 +44,11 @@ moveAnts regionMap world stats graph ants = orders
         ctx = (Context world stats graph regionMap)
         (_, orders) = evalRWS (moveAnts' ants) ctx S.empty 
 
-
+antPaths :: RegionMap -> Map -> GameStats -> Graph -> [AntTask] -> [[Point]]
+antPaths regionMap world stats graph ants = paths 
+    where 
+        ctx = (Context world stats graph regionMap)
+        (paths, orders) = evalRWS (antPaths' ants) ctx S.empty 
 
 successor ::  Map -> SquareSet -> SearchNode -> [SearchNode]
 successor world occupied sn@(SearchNode p d prev) = map toNode . filter valid $ neighbors
@@ -140,7 +145,7 @@ makeMove p (Just sn) = makeMove' (searchPath sn)
     
     
 searchLimit :: Int
-searchLimit = 100
+searchLimit = 1000
 
 findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
 findDest f = find f . take searchLimit 
@@ -151,6 +156,13 @@ pathToPoint source dest = do
 	size <- asks (mapSize . cWorld)
 	
 	return $ findDest ((== dest) . fromIndex size . snKey) $ nodes
+	
+pathToFood :: Point -> Point -> Move (Maybe SearchNode)
+pathToFood source dest = do
+        nodes <- pathFind source dest 
+        world <- asks cWorld
+        
+        return $ findDest (hasFood . (world `atIndex`) . snKey) $ nodes	
 	
 pathToRegion ::  Point -> RegionIndex -> Move (Maybe SearchNode)
 pathToRegion source region = do
@@ -165,15 +177,33 @@ pathFind source dest = do
     world <- asks cWorld
     occupied <- get    
     return $ search (successor world occupied) (metric (mapSize world) dest)  (mapSize world `wrapIndex` source)
+
+
+antPath :: Point -> Task -> Move [Point]
+antPath p (Goto r)      = pathToRegion p r >>= makeMove' p
+antPath p (Gather p')   = pathToFood p p' >>= makeMove' p
+antPath p _ = anyMove p >> return []
+            
+            
+makeMove' p Nothing   = makeMove p Nothing >> return []          
+makeMove' p (Just sn) = do
     
-	
+    size <- asks (mapSize . cWorld)
+    makeMove p (Just sn)
+    
+    return $ map (fromIndex size) $ (searchPath sn) 
+    
+        
 moveAnt :: Point -> Task -> Move ()
-moveAnt p (Goto r) 		= pathToRegion p r >>= makeMove p
-moveAnt p (Gather p')   = pathToPoint p p' >>= makeMove p
+moveAnt p (Goto r)      = pathToRegion p r >>= makeMove p
+moveAnt p (Gather p')   = pathToFood p p' >>= makeMove p
 moveAnt p _ = anyMove p
 
     
 moveAnts' :: [AntTask] -> Move ()
 moveAnts' ants = forM_ ants (uncurry moveAnt)
 	
+	
+antPaths' :: [AntTask] -> Move [[Point]]
+antPaths' ants = forM ants (uncurry antPath)	
     

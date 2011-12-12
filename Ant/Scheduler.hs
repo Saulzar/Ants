@@ -197,7 +197,7 @@ getAntPaths region numRequired maxDistance = do
     
                                        
 foodDistance :: Distance
-foodDistance = 10
+foodDistance = 20
 
 assignFood :: [Point] -> Point -> Scheduler ()
 assignFood ants  p = do
@@ -246,14 +246,18 @@ sumInfluence scale numRegions regionMap influence = U.create $ do
 antDensity :: Size -> Int -> RegionMap -> [Point] -> U.Vector Float    
 antDensity size numRegions regionMap ants = sumInfluence influenceScale numRegions regionMap squareInfluence  
     where
-        squareInfluence = influenceCount size distSq ants
+        squareInfluence = influenceCount 1 size distSq ants
 
-        distSq = 25
+        distSq = 4
         influenceScale = 1.0 / fromIntegral (length (circlePoints distSq)) 
 
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
-    ants <- allFreeAnts
+    --ants <- allFreeAnts
+    
+    ants <- asks (map fst . fst . gsAnts . cStats)  
+    
+    
     regions <- asks (grNodes . cGraph)
     regionMap <- asks cRegionMap   
     size <- asks (mapSize . cWorld) 
@@ -270,7 +274,7 @@ diffuseAnts =  do
     graph <- asks cGraph
     let flow = flowGraph graph passableVec 
     
-    let diffused = (diffuse 1.5 flow densityVec) !! 20
+    let diffused = (diffuse 3.0 flow densityVec) !! 30
     
     mapM_ (diffuseRegion flow diffused) regions
     return ()
@@ -300,16 +304,16 @@ regionDensity antDensity region = do
     stats <- asks cStats 
             
     let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
-    let visibleMod = max (-0.1 * fromIntegral lastVisible) (-1.0)
+    let visibleMod = max (-0.1 * fromIntegral lastVisible) (-0.5)
 
     frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
-    let frontierMod = if frontier then -1.0 else 0
+    let frontierMod = if frontier then -1.5 else 0
     
     let rs = stats `gsRegion` region    
     let foodMod = negate . fromIntegral . length . rcFood . rsContent $ rs
     
       
-    return (foodMod + antDensity * 0.2 + visibleMod + frontierMod)
+    return $ antDensity * 0.05 + visibleMod + frontierMod + foodMod
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

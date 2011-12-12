@@ -98,12 +98,12 @@ noVisibility :: Size -> U.Vector Bool
 noVisibility size = (U.replicate (area size) False)
 
 
-influenceCount :: Size -> Int -> [Point] -> U.Vector Int
-influenceCount size radiusSq ants = U.create $ do
+influenceCount :: Int -> Size -> Int -> [Point] -> U.Vector Int
+influenceCount spread size radiusSq ants = U.create $ do
     v <- UM.replicate (area size) 0
     
-    mapOffsets radiusSq ants $ \ant offset -> do
-       let i = wrapIndex size (ant `addSize` offset)
+    mapOffsets radiusSq ants $ \ant (Size x y) -> do
+       let i = wrapIndex size (ant `addSize` (Size (x * spread) (y * spread)))
         
        n <- UM.unsafeRead v i
        UM.unsafeWrite v i (n + 1)
