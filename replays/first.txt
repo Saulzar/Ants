@@ -143,24 +143,4 @@ turn 11
 h 32 6 0
 a 30 0 0
 a 31 0 0
-go
-turn 12
-d 30 0 0
-d 30 0 0
-go
-turn 13
-go
-turn 14
-go
-turn 15
-go
-turn 16
-go
-turn 17
-go
-turn 18
-go
-turn 19
-go
-turn 20
 end

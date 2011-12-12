@@ -83,9 +83,9 @@ flowParticles worldSize flowGraph densities region particles = flowParticles' ou
     -- Normalized distance, distance of particle divided by length of edge * flow rate
     
     heuristic :: Point -> (Connection, Float) -> ((Point, RegionIndex), Float)
-    heuristic p (c, f) = ((p, r), f * capacity * normDistance)
+    heuristic p (c, f) = ((p, r), f * capacity / normDistance)
         where
-            node' = flowGraph `indexV` region
+            node' = flowGraph `indexV` r
             capacity = cConnectivity c / nTotal node 
             
             r = cRegion c

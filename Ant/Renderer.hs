@@ -103,18 +103,24 @@ renderPoints ps = do
  
  -- data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving Eq
  
-renderTasks :: Graph -> AntSet -> Render ()
-renderTasks graph ants = do 
+wrapLine :: Size -> Point -> Point -> Render ()
+wrapLine worldSize p p' = drawLine' p d
+    where d = wrapDiff worldSize  p p'
+          
+renderTasks :: Size -> Graph -> [AntTask] -> Render ()
+renderTasks size graph ants = do 
 
     setLineWidth 0.2
-    forM_ (MM.toList ants) $ renderTask
+    forM_ ants $ renderTask
     
     where
         
-        renderTask (p, Goto r) = setColour lightblue >> drawLine p p' >> drawAnt p
+        
+        
+        renderTask (p, Goto r) = setColour lightblue >> drawAnt p >> setColour black >> wrapLine size p p'
             where p' = regionCentre (graph `grIndex` r)
             
-        renderTask (p, Gather food) = setColour lightgreen >> drawLine p food >> drawAnt p
+        renderTask (p, Gather food) = setColour lightgreen >>  drawAnt p >> setColour black >> wrapLine size p food
         renderTask (p, _) = setColour gray >> drawAnt p
  
  
@@ -126,8 +132,8 @@ renderSquare sq p = do
     whenMaybe (squareHill sq) $ \player ->
         drawHill player p
         
---    whenMaybe (squareAnt sq) $ \player ->
---        drawAnt player p
+    whenMaybe (squareAnt sq) $ \player ->
+        drawAnt player p
     
     when (hasFood sq) $ drawFood p
 

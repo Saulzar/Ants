@@ -154,8 +154,10 @@ renderInWindow win state = do
         
         
 
-       -- let found = scheduleAnts world stats graph ants        
-       -- renderTasks graph found
+        let found = scheduleAnts (regionMap builder) world stats graph ants  
+            
+        traceShow found $ return ()
+        renderTasks (mapSize world) graph found
         
 
         

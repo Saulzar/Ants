@@ -36,6 +36,7 @@ import Ant.Graph
 import Ant.Scheduler
 import Ant.Movement
 
+import System.IO
 import System.Random
 import Debug.Trace
 
@@ -57,8 +58,8 @@ initialState settings = GameState
     { gameSettings    = settings
     , gameMap         = emptyMap unknownSquare (mapDimensions settings) 
     , gameBuilder     = emptyBuilder (mapDimensions settings) 32
-    , gamePass 		  = emptyPassibility (mapDimensions settings) pattern2
-	, gameStats		  = initialStats 
+    , gamePass        = emptyPassibility (mapDimensions settings) pattern2
+    , gameStats       = initialStats 
     , gameGraph       = grEmpty
     }
  
@@ -114,8 +115,9 @@ updateState content = do
 	let content' = filter (not . containsWater . snd) content
 
 	let stats' = updateStats world' graph (regionMap builder') vis content' stats
-	let antTasks = scheduleAnts world stats' graph ants
-	liftIO $ print antTasks
+	let antTasks = scheduleAnts (regionMap builder') world stats' graph ants
+	
+	liftIO $ hPrint stderr antTasks
 	
 	let moves = moveAnts (regionMap builder') world stats graph antTasks
 		

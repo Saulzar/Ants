@@ -71,68 +71,76 @@ nodeRegion regionMap = fst . (regionMap `indexU`) . snKey
 
 isFree :: Point -> Move Bool
 isFree p = do
-	size <- asks (mapSize . cWorld)
+    size <- asks (mapSize . cWorld)
 
-	notTaken <- gets (S.notMember (size `wrapIndex`  p))
-	land 	 <- asks (isLand . (`at` p) .  cWorld)
-	
-	return (notTaken && land) 
+    notTaken <- gets (S.notMember (size `wrapIndex`  p))
+    land 	 <- asks (isLand . (`at` p) .  cWorld)
+    
+    return (notTaken && land) 
 {-# INLINE isFree #-}
 
 occupy :: Point -> Move ()
 occupy p =  do
-	size <- asks (mapSize . cWorld)
-	modify (S.insert (size `wrapIndex`  p))
+    size <- asks (mapSize . cWorld)
+    modify (S.insert (size `wrapIndex`  p))
 {-# INLINE occupy #-}
 
 
-	
+    
 allMoves :: Point -> Move [(Point, Maybe Direction)]
 allMoves (Point x y) = do
-	size <- asks (mapSize . cWorld)
-	
-	let order p dir = (wrapPoint size p, dir)
-	return $ 	[ order (Point (x - 1) y) (Just West)
-				, order (Point (x + 1) y) (Just East)
-				, order (Point x (y + 1)) (Just North)
-				, order (Point x (y - 1)) (Just South)
-				, order (Point x y) Nothing
-				]
+    size <- asks (mapSize . cWorld)
+    
+    let order p dir = (wrapPoint size p, dir)
+    return $ 	[ order (Point (x - 1) y) (Just West)
+                            , order (Point (x + 1) y) (Just East)
+                            , order (Point x (y + 1)) (Just South)
+                            , order (Point x (y - 1)) (Just North)
+                            , order (Point x y) Nothing
+                            ]
 
-		
+            
 order :: Point -> Maybe Direction -> Move ()
-order p Nothing 	= occupy p 						-- Mark square as occupied but don't send a move
-order p (Just dir) 	= occupy p >> tell [(p, dir)]		-- Mark as occupied and send move
-	
+order p Nothing         = occupy p                      -- Mark square as occupied but don't send a move
+order (Point x y) (Just dir)      = occupy p' >> tell [(Point x y, dir)]   -- Mark as occupied and send move
+    where 
+        p' = case dir of 
+            East -> Point (x + 1) y
+            West -> Point (x - 1) y
+            North -> Point x (y - 1)
+            South -> Point x (y + 1)
+    
+    
 anyMove ::  Point -> Move ()
 anyMove p = allMoves p >>= move' 
-	where 
-		move' [] = return ()  -- Ouch, no valid moves
-		move' ((p', dir) : ms) = do
-			free <- isFree p'
-			if free then order p dir else move' ms
+    where 
+            move' [] = return ()  -- Ouch, no valid moves
+            move' ((p', dir) : ms) = do
+                    free <- isFree p'
+                    if free then order p dir else move' ms
 
 moveTo :: Point -> Point -> Move ()
-moveTo p p' = do
-	moves <- allMoves p
-	case lookup p' moves of 
-		(Just dir) -> order p dir
-		Nothing    -> error "Move square not adjacent to source"
-			
+moveTo p p' =  do
+    moves <- allMoves p
+    case lookup p' moves of 
+            (Just dir) -> order p dir
+            Nothing    -> error "Move square not adjacent to source"
+                    
 makeMove :: Point -> Maybe SearchNode -> Move ()
 makeMove p Nothing   = anyMove p
 makeMove p (Just sn) = makeMove' (searchPath sn)
-	where 
-		makeMove' (_ : next : _) = do
-			size <- asks (mapSize . cWorld)
-			let p' = fromIndex size next
-			moveTo p p'
-			
-		makeMove' _ = anyMove p  -- We're at the destination already, do something
-	
-	
+    where 
+            makeMove' (_ : next : _) = do
+                    size <- asks (mapSize . cWorld)
+                    let p' = fromIndex size next
+                    
+                    moveTo p p'
+                    
+            makeMove' _ = anyMove p  -- We're at the destination already, do something
+    
+    
 searchLimit :: Int
-searchLimit = 1000
+searchLimit = 100
 
 findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
 findDest f = find f . take searchLimit 

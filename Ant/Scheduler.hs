@@ -22,6 +22,7 @@ import Ant.Map
 import Ant.RegionStats
 import Ant.Search
 import Ant.Diffusion
+import Ant.Vector
 
 import Data.List
 import Data.Function
@@ -37,23 +38,24 @@ import Control.Monad.State.Strict
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Unboxed.Mutable as UM
 
 type AntSet = M.Map Point Task
 type AntTask = (Point, Task)
 
 data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
 
-scheduleAnts :: Map -> GameStats -> Graph -> [Point] -> [AntTask]
-scheduleAnts world stats graph ants = M.toList $ runReader (execStateT schedule antSet) ctx
+scheduleAnts :: RegionMap -> Map -> GameStats -> Graph -> [Point] -> [AntTask]
+scheduleAnts regionMap world stats graph ants = M.toList $ runReader (execStateT schedule antSet) ctx
     where 
-        ctx = (Context world stats graph)
+        ctx = (Context world stats graph regionMap)
         schedule = gatherFood >> diffuseAnts
         antSet = initialSet ants
     
-runScheduler :: Map -> GameStats -> Graph -> [Point] -> Scheduler a -> a
-runScheduler world stats graph ants schedule = runReader (evalStateT schedule antSet) ctx
+runScheduler :: RegionMap -> Map -> GameStats -> Graph -> [Point] -> Scheduler a -> a
+runScheduler regionMap world stats graph ants schedule = runReader (evalStateT schedule antSet) ctx
     where 
-        ctx = (Context world stats graph)
+        ctx = (Context world stats graph regionMap)
         antSet = initialSet ants	
 	
     
@@ -64,6 +66,7 @@ data Context = Context
     { cWorld :: Map
     , cStats :: GameStats
     , cGraph :: Graph
+    , cRegionMap :: RegionMap
     }
     
     
@@ -142,6 +145,9 @@ freeAntsRegion region = do
         
     freeAnts (map fst . rcAnts . rsContent $ rs)
 {-# INLINE freeAntsRegion #-}
+
+
+
     
 findAnts :: forall a. (SearchNode -> Point ->  Maybe a) -> RegionIndex -> Int -> Distance -> Scheduler [a]
 findAnts f region minRequired maxDistance = do     
@@ -191,7 +197,7 @@ getAntPaths region numRequired maxDistance = do
     
                                        
 foodDistance :: Distance
-foodDistance = 40
+foodDistance = 10
 
 assignFood :: [Point] -> Point -> Scheduler ()
 assignFood ants  p = do
@@ -219,12 +225,43 @@ gatherFood = do
     regions <- asks (grNodes . cGraph)
     mapM_ gatherFoodAt regions
     
+
+allFreeAnts ::Scheduler [Point]
+allFreeAnts = do 
+    (ants, _) <- asks (gsAnts . cStats)                                               
+    freeAnts (map fst ants)
+{-# INLINE allFreeAnts #-}    
     
+    
+sumInfluence :: Float -> Int -> RegionMap -> U.Vector Int -> U.Vector Float
+sumInfluence scale numRegions regionMap influence = U.create $ do                 
+        v <- UM.replicate numRegions 0
+        forRegion regionMap $ \i region -> do
+            let inf = influence `indexU` i 
+            inf' <- readU v region
+            
+            writeU v region (inf' + scale * fromIntegral inf)
+        return v    
+    
+antDensity :: Size -> Int -> RegionMap -> [Point] -> U.Vector Float    
+antDensity size numRegions regionMap ants = sumInfluence influenceScale numRegions regionMap squareInfluence  
+    where
+        squareInfluence = influenceCount size distSq ants
+
+        distSq = 25
+        influenceScale = 1.0 / fromIntegral (length (circlePoints distSq)) 
+
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
+    ants <- allFreeAnts
     regions <- asks (grNodes . cGraph)
-    
-    densities <- mapM regionDensity regions
+    regionMap <- asks cRegionMap   
+    size <- asks (mapSize . cWorld) 
+    numRegions <- asks (grSize . cGraph)
+        
+    let antDensities = antDensity size numRegions regionMap ants
+        
+    densities <- forM regions $ \r -> regionDensity (antDensities `indexU` r) r
     passable <- mapM diffusableRegion regions
     
     let densityVec = U.fromList densities
@@ -233,7 +270,7 @@ diffuseAnts =  do
     graph <- asks cGraph
     let flow = flowGraph graph passableVec 
     
-    let diffused = (diffuse 1.2 flow densityVec) !! 20
+    let diffused = (diffuse 1.5 flow densityVec) !! 20
     
     mapM_ (diffuseRegion flow diffused) regions
     return ()
@@ -251,25 +288,28 @@ diffuseRegion flow density region = do
     
     
 diffusableRegion :: RegionIndex -> Scheduler Bool
-diffusableRegion region = do 
+diffusableRegion region = return True {- do 
     stats <- asks cStats 
 
     let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
-    return (enemyInfluence < 2) 
+        return (enemyInfluence < 2) -} 
                 
         
-regionDensity :: RegionIndex -> Scheduler Float
-regionDensity region = do  
+regionDensity :: Float -> RegionIndex -> Scheduler Float
+regionDensity antDensity region = do  
     stats <- asks cStats 
             
     let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
     let visibleMod = max (-0.1 * fromIntegral lastVisible) (-1.0)
 
     frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
-    let frontierMod = if frontier then -0.5 else 0
+    let frontierMod = if frontier then -1.0 else 0
     
-    ants <- freeAntsRegion region       
-    return (fromIntegral (length ants) + visibleMod + frontierMod)
+    let rs = stats `gsRegion` region    
+    let foodMod = negate . fromIntegral . length . rcFood . rsContent $ rs
+    
+      
+    return (foodMod + antDensity * 0.2 + visibleMod + frontierMod)
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

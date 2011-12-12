@@ -14,6 +14,9 @@ module Ant.RegionStats
 
     , indexV
     , indexU
+    , forRegion
+    
+    , sumRegionInfluence
     
     )
     where
