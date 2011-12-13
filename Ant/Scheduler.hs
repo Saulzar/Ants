@@ -257,40 +257,35 @@ makeFlowGraph = do
     graph <- getGame gameGraph
     return (flowGraph graph passableVec) 
     
-densityRaw :: Scheduler (U.Vector Float)    
-densityRaw = do
-    regions <- getGame (U.fromList . grNodes . gameGraph)
-    
-    antDensities <- antDensity    
-    U.forM regions $ \r -> regionDensity (antDensities `indexU` r) r
-
+           
             
-flowDensity :: Scheduler (U.Vector Float)
+flowDensity :: Scheduler (U.Vector Float, FlowGraph)
 flowDensity = do
 
-    density      <- densityRaw    
-    flow         <- makeFlowGraph 
+    rDensity   <- regionDensity
+    aDensity   <- antDensity
+        
+    flowGraph         <- makeFlowGraph 
     
-    return $ (diffuse 2.0 flow density ) !! 30
+    let diffuseRegions = diffuse 3.0 flowGraph rDensity  !! 30 
+    let diffuseAnts    = U.map (* 0.1) $ diffuse 1.0 flowGraph aDensity  !! 4
+    
+    return (U.zipWith (+) diffuseRegions diffuseAnts, flowGraph)
         
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
-    regions <- getGame (grNodes . gameGraph)
+    regions <- getGame (grNodes . gameGraph)            
+    (density, flowGraph)  <- flowDensity 
     
-    density      <- densityRaw    
-    flow         <- makeFlowGraph 
-    
-    let diffused = (diffuse 3.0 flow density ) !! 30 
-    
-    mapM_ (diffuseRegion flow diffused) regions
+    mapM_ (diffuseRegion flowGraph density) regions
     
     
 diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
-diffuseRegion flow density region = do
+diffuseRegion flowGraph density region = do
     ants <- freeAntsRegion region   
     size <- getGame (mapSize . gameMap)
     
-    let antDests = flowParticles size flow density region ants
+    let antDests = flowParticles size flowGraph density region ants
     forM_ antDests $ \(ant, dest) ->  reserveAnt ant (Goto dest)
     
     
@@ -301,21 +296,26 @@ diffusableRegion region = return True {- do
     let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
         return (enemyInfluence < 2) -} 
                 
+regionDensity :: Scheduler (U.Vector Float)    
+regionDensity = do
+    regions <- getGame (U.fromList . grNodes . gameGraph) 
+    U.forM regions $ \r -> regionDensity' r
+                
         
-regionDensity :: Float -> RegionIndex -> Scheduler Float
-regionDensity antDensity region = do  
+regionDensity' ::  RegionIndex -> Scheduler Float
+regionDensity' region = do  
     stats <- getGame gameStats 
             
     let lastVisible = gsVisited stats `indexU` region 
     let visibleMod = max (-0.1 * fromIntegral lastVisible) (-0.5)
 
     frontier <- getGame (regionFrontier . (`grIndex` region) . gameGraph)
-    let frontierMod = if frontier then -0.6 else 0
+    let frontierMod = if frontier then -0.8 else 0
     
     let rs = stats `gsRegion` region    
     let foodMod = negate . fromIntegral . length . rcFood  $ rs
   
-    return $ antDensity * 0.05 + visibleMod + frontierMod + 2.0 * foodMod 
+    return $ visibleMod + frontierMod + 2.0 * foodMod 
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

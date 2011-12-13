@@ -115,7 +115,7 @@ renderInWindow win state = do
         tasks <- scheduleAnts ants 
         paths <- runMove (antPaths tasks)
 
-        density <- runScheduler ants flowDensity 
+        (density, _) <- runScheduler ants flowDensity 
         return (tasks, paths, density)
     
     renderWithDrawable win $ withTransform $ do 
