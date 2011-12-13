@@ -1,9 +1,10 @@
 module Ant.Movement 
-	( moveAnts
-	, antPaths
-	
-	)
-	where
+    ( moveAnts
+    , antPaths
+    , runMove
+    
+    )
+    where
 
 import Data.List
 import Data.Maybe

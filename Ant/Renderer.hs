@@ -8,6 +8,7 @@ import Graphics.Rendering.Cairo
 import qualified Data.Vector as V
 
 import Ant.Game
+import Ant.Scheduler
 
 import Data.Colour.SRGB
 import Data.Colour.Names
@@ -114,9 +115,7 @@ renderTasks size graph ants = do
     forM_ ants $ renderTask
     
     where
-        
-        
-        
+
         renderTask (p, Goto r) = setColour lightblue >> drawAnt p >> setColour black >> wrapLine size p p'
             where p' = regionCentre (graph `grIndex` r)
             

@@ -68,6 +68,7 @@ data GameStats = GameStats
     , gsContent         :: [SquareContent]     
     
     , gsVisited         :: U.Vector Int
+    , gsEnemyDistances  :: U.Vector Float
     
     
     } deriving Show
@@ -85,6 +86,7 @@ initialStats = GameStats
     , gsAnts            = ([], [])
     , gsVisited         = U.empty
     , gsContent             = []
+    , gsEnemyDistances      = U.empty
     }
     
     
@@ -104,8 +106,8 @@ potentialEnemies world ants = foldr addValid S.empty ants where
     addValid p s = foldr S.insert s (valid p)
     valid p = filter (isLand . (world `at`)) .  map (wrapPoint (mapSize world)) $ (p : neighbors p)
         
-enemyDistanceMap :: Map -> Size -> Int -> [Point] -> U.Vector Float
-enemyDistanceMap world size distance ants = minDistanceMap size distance ants'
+enemyDistanceMap :: Map -> Int -> [Point] -> U.Vector Float
+enemyDistanceMap world distance ants = minDistanceMap (mapSize world) distance ants'
     where ants' = S.toList $ potentialEnemies world ants 
         
 minDistanceMap :: Size -> Int -> [Point] -> U.Vector Float
@@ -152,6 +154,7 @@ updateStats world graph regionMap vis content stats = stats
         , gsAnts        = (map fst ourAnts, enemyAnts)
         , gsVisited     = updateVisited regionContent' (gsVisited stats)
         , gsContent     = content'
+        , gsEnemyDistances = enemyDistances
         }
         where
 
@@ -169,6 +172,8 @@ updateStats world graph regionMap vis content stats = stats
             (ourAnts, enemyAnts) = splitEnemy . filterAnts $ content'            
             
             regionContent'  = regionContent (mapSize world) graph regionMap content'
+            
+            enemyDistances = enemyDistanceMap world 5 (map fst enemyAnts)
         
 addContent :: RegionContent -> SquareContent -> RegionContent
 addContent rc (p, Ant 0)     = rc { rcAnts    = p : rcAnts rc }

@@ -2,14 +2,16 @@
 
 module Ant.Scheduler 
     ( scheduleAnts
-	, runScheduler
+    , runScheduler
     , initialSet
     , testSearch
     , diffuseAnts
     
+    , flowDensity
+    
     , AntSet
     , Task (..)
-	, AntTask
+    , AntTask
     
     )
 where
@@ -122,8 +124,9 @@ testSearch = do
    
     
 freeAntsRegion :: RegionIndex -> Scheduler [Point]
-freeAntsRegion region = getGame  (rcAnts  .  (`gsRegion` region) . gameStats)                                             
-
+freeAntsRegion region = do
+    regionAnts <- getGame  (rcAnts  .  (`gsRegion` region) . gameStats)                                             
+    freeAnts regionAnts
 {-# INLINE freeAntsRegion #-}
 
 
@@ -177,16 +180,18 @@ getAntPaths region numRequired maxDistance = do
     
                                        
 foodDistance :: Distance
-foodDistance = 6
+foodDistance = 8
 
 assignFood :: [Point] -> Point -> Scheduler ()
 assignFood ants  p = do
-	size <- getGame (mapSize . gameMap)
-	ants' <- freeAnts ants
+    size <- getGame (mapSize . gameMap)
+    ants' <- freeAnts ants
 
-	when (not . null $ ants') $ do
-		let ant = minimumBy (compare `on` manhatten size p) ants'
-		reserveAnt ant (Gather p)
+    when (not . null $ ants') $ do
+        let ant = minimumBy (compare `on` manhatten size p) ants'
+        
+        when (manhatten size p ant < foodDistance) $
+            reserveAnt ant (Gather p)
     
     --traceShow ant $ return ()
 
@@ -216,51 +221,73 @@ allFreeAnts = do
     
 sumInfluence :: Float -> Int -> RegionMap -> U.Vector Int -> U.Vector Float
 sumInfluence scale numRegions regionMap influence = U.create $ do                 
-        v <- UM.replicate numRegions 0
-        forRegion regionMap $ \i region -> do
-            let inf = influence `indexU` i 
-            inf' <- readU v region
-            
-            writeU v region (inf' + scale * fromIntegral inf)
-        return v    
+    v <- UM.replicate numRegions 0
+    forRegion regionMap $ \i region -> do
+        let inf = influence `indexU` i 
+        inf' <- readU v region
+        
+        writeU v region (inf' + scale * fromIntegral inf)
+    return v    
     
-antDensity :: Size -> Int -> RegionMap -> [Point] -> U.Vector Float    
-antDensity size numRegions regionMap ants = sumInfluence influenceScale numRegions regionMap squareInfluence  
+antDensity :: Scheduler (U.Vector Float)
+antDensity = do
+    regionMap   <- getGame (regionMap . gameBuilder)
+    size        <- getGame (mapSize . gameMap) 
+    numRegions  <- getGame (grSize . gameGraph)
+    
+    (ants, _) <- getGame (gsAnts . gameStats)  
+        
+    return (antDensity' size numRegions regionMap ants)
+    
+antDensity' :: Size -> Int -> RegionMap -> [Point] -> U.Vector Float    
+antDensity' size numRegions regionMap ants = sumInfluence influenceScale numRegions regionMap squareInfluence  
     where
         squareInfluence = influenceCount size distSq ants
 
         distSq = 16
         influenceScale = 1.0 / fromIntegral (length (circlePoints distSq)) 
 
-diffuseAnts :: Scheduler ()
-diffuseAnts =  do
-    (ants, _) <- getGame (gsAnts . gameStats)  
-        
+makeFlowGraph :: Scheduler FlowGraph
+makeFlowGraph = do        
     regions <- getGame (grNodes . gameGraph)
-    regionMap <- getGame (regionMap . gameBuilder)
-    size <- getGame (mapSize . gameMap) 
-    numRegions <- getGame (grSize . gameGraph)
-        
-    let antDensities = antDensity size numRegions regionMap ants
-        
-    densities <- forM regions $ \r -> regionDensity (antDensities `indexU` r) r
+                
     passable <- mapM diffusableRegion regions
-    
-    let densityVec = U.fromList densities
     let passableVec = U.fromList passable
     
     graph <- getGame gameGraph
-    let flow = flowGraph graph passableVec 
+    return (flowGraph graph passableVec) 
     
-    let diffused = (diffuse 3.0 flow densityVec) !! 30
+densityRaw :: Scheduler (U.Vector Float)    
+densityRaw = do
+    regions <- getGame (U.fromList . grNodes . gameGraph)
+    
+    antDensities <- antDensity    
+    U.forM regions $ \r -> regionDensity (antDensities `indexU` r) r
+
+            
+flowDensity :: Scheduler (U.Vector Float)
+flowDensity = do
+
+    density      <- densityRaw    
+    flow         <- makeFlowGraph 
+    
+    return $ (diffuse 2.0 flow density ) !! 30
+        
+diffuseAnts :: Scheduler ()
+diffuseAnts =  do
+    regions <- getGame (grNodes . gameGraph)
+    
+    density      <- densityRaw    
+    flow         <- makeFlowGraph 
+    
+    let diffused = (diffuse 3.0 flow density ) !! 30 
     
     mapM_ (diffuseRegion flow diffused) regions
-    return ()
     
     
 diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
 diffuseRegion flow density region = do
-    ants <- freeAntsRegion region
+    ants <- freeAntsRegion region   
     size <- getGame (mapSize . gameMap)
     
     let antDests = flowParticles size flow density region ants
@@ -283,12 +310,12 @@ regionDensity antDensity region = do
     let visibleMod = max (-0.1 * fromIntegral lastVisible) (-0.5)
 
     frontier <- getGame (regionFrontier . (`grIndex` region) . gameGraph)
-    let frontierMod = if frontier then -0.9 else 0
+    let frontierMod = if frontier then -0.6 else 0
     
     let rs = stats `gsRegion` region    
     let foodMod = negate . fromIntegral . length . rcFood  $ rs
   
-    return $ antDensity * 0.05 + visibleMod + frontierMod + foodMod
+    return $ antDensity * 0.05 + visibleMod + frontierMod + 2.0 * foodMod 
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

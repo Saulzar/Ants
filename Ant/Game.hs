@@ -52,7 +52,7 @@ data GameState = GameState
     , gameMap           :: Map
     , gameBuilder       :: RegionBuilder
     , gamePass          :: Passibility
-	, gameStats			:: GameStats
+    , gameStats         :: GameStats
     , gameGraph         :: Graph
     }
 

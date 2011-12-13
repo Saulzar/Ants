@@ -5,6 +5,7 @@ import Graphics.UI.Gtk
 import Graphics.Rendering.Cairo
 import Control.Monad
 
+import Control.Monad.State.Strict
 import Control.Concurrent
 
 
@@ -15,7 +16,8 @@ import Ant.Game
 import Ant.Renderer
 import Ant.Scheduler
 import Ant.Diffusion
-
+import Ant.GameLoop
+import Ant.Movement
 
 
 import Debug.Trace
@@ -85,7 +87,13 @@ withTransform r = do
     r
     setMatrix m
     
- 
+normalizeIntensity :: U.Vector Float -> (Int -> Float)
+normalizeIntensity v = intensity where
+    v' = U.toList v
+    (low, high) = (minimum v', maximum v')
+    
+    scale = 1.0 / (high - low)
+    intensity i = scale * (v `indexU` i - low)   
     
 renderInWindow :: DrawableClass drawable => drawable -> GameState -> IO ()
 renderInWindow win state = do 
@@ -101,6 +109,15 @@ renderInWindow win state = do
     let dw = (vw - w) `div` 2
     let dh = (vh - h) `div` 2
     
+    (tasks, paths, density) <- flip evalStateT state $ do
+        
+        ants  <- gets (fst . gsAnts . gameStats)
+        tasks <- scheduleAnts ants 
+        paths <- runMove (antPaths tasks)
+
+        density <- runScheduler ants flowDensity 
+        return (tasks, paths, density)
+    
     renderWithDrawable win $ withTransform $ do 
         --setAntialias AntialiasNone
         
@@ -109,51 +126,20 @@ renderInWindow win state = do
 
         let (start, end) = (Point (-dw) (-dh), Point (w + dw) (h + dh))
         
-        
         --renderMap (worldColour world) start end
-        renderMap (regionColours world (regionMap builder)) start end    
+        --renderMap (regionColours world (regionMap builder)) start end    
         
+        let f = normalizeIntensity density 
         
-        {-
-
-        let (lower, upper) = (U.minimum diffused, U.maximum diffused)
-        let scale = 1.0 / (upper - lower)
-        
-        let indexD p = scale * ((diffused `indexU` p) - lower)  
-
-        renderMap (regionColours' indexD world (regionMap builder)) start end 
-                -}
-        
-        --renderGraph (mapSize world) graph
-               
-        {-let (Just r) = M.lookup 8 (regions graph)
-    
-        let visited = searchRegion (gamePass state) world (regionMap graph) r   
-        let neighbors = neighborSquares (mapSize world) visited
-        let (sqs, rs) = findChanges (regionMap graph) visited 
-        
-        setSourceRGBA 0 0 0.4 1 
-                
-        forM_ (M.toList visited) $ \(i, d) ->  do
-            let p = fromIndex (mapSize world) i
-            drawCircle p 0.2
-            fill
-        -}
+        renderMap (regionColours' f world (regionMap builder)) start end    
         
         --renderMap (passColours world (gamePass state)) start end
+        
+        renderPoints (concat paths)
         renderContent world start end 
         
-        
+        renderTasks (mapSize world) graph tasks
 
-        let found = scheduleAnts (regionMap builder) world stats graph ants  
-            
-        traceShow found $ return ()
-        renderTasks (mapSize world) graph found
-        
-        
-        let paths = antPaths (regionMap builder) world stats graph found
-        renderPoints (concat paths)
-        
         
         setSourceRGBA 0.0 0.0 0.0 0.4 
         setLineWidth (2.0 / s)
@@ -167,17 +153,7 @@ renderInWindow win state = do
         builder = gameBuilder state
         stats    = gameStats state
 
-        fDist' r = (fromIntegral d / 120.0) where
-            d = rsHillDistance (gsRegions stats `indexV` r)
-
-        density' r = fromMaybe 0 (density r)
-            
-        density :: RegionIndex -> Maybe Float
-        density r = Just (ourInf / 2.0)
-            where
-                (ourInf, enemyInf) =  gsRegionInfluence stats `indexU` r
-
-        ants = map fst . fst . gsAnts $ stats
+        ants = fst . gsAnts $ stats
         
         -- diffGr = runScheduler world stats graph antSet diffuseAnts     
             

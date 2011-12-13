@@ -51,7 +51,7 @@ Flag Debug
 
 Executable Ants
   -- .hs or .lhs file containing the Main module.
-  Main-is: Ant/Main.hs             
+  Main-is: Ant/Debugger.hs             
   
   -- Packages needed in order to build this package.
   Build-depends:  
@@ -62,7 +62,11 @@ Executable Ants
       vector >= 0.7.1.0,
       split >= 0.1,
       fingertree >= 0.0.1,
-      PSQueue >= 1.1   
+      PSQueue >= 1.1,
+      colour >= 2.3,
+      gtk >= 0.12,
+      cairo >= 0.12
+      
 
   if flag(debug) 
     GHC-Options: -DDEBUG
@@ -75,7 +79,9 @@ Executable Ants
     CC-Options: "-DDEBUG"
     GHC-Options: -DDEBUG    	  
 	  
-  ghc-options: -O2 -funbox-strict-fields -static -optl-pthread -optl-static
+  ghc-options: -O2 -funbox-strict-fields 
+      
+   -- -static -optl-pthread -optl-static
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
 
