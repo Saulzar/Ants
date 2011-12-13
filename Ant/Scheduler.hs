@@ -227,9 +227,9 @@ sumInfluence scale numRegions regionMap influence = U.create $ do
 antDensity :: Size -> Int -> RegionMap -> [Point] -> U.Vector Float    
 antDensity size numRegions regionMap ants = sumInfluence influenceScale numRegions regionMap squareInfluence  
     where
-        squareInfluence = influenceCount 1 size distSq ants
+        squareInfluence = influenceCount size distSq ants
 
-        distSq = 4
+        distSq = 16
         influenceScale = 1.0 / fromIntegral (length (circlePoints distSq)) 
 
 diffuseAnts :: Scheduler ()

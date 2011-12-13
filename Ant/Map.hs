@@ -11,7 +11,6 @@ module Ant.Map
     , noVisibility
     , visibleSet
     , influenceCount
-    , minDistanceMap
     
     , circlePoints
     
