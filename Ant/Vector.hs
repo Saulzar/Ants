@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards, NoMonomorphismRestriction #-}
+{-# LANGUAGE PatternGuards, NoMonomorphismRestriction, CPP #-}
 
 module Ant.Vector where
 

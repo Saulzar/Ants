@@ -28,7 +28,11 @@ import Ant.Point
 import Data.Maybe
 import Control.Monad.State
 import System.IO
+import Data.IORef
 import Ant.Util
+
+import System.CPUTime
+import Text.Printf
 
 data Direction = North | East | South | West deriving (Show, Eq, Enum)
 type Player = Int
@@ -161,19 +165,30 @@ beginTurn = do
     
 
 gameLoop :: (MonadIO m) => (Int -> [SquareContent] -> m [Order]) ->  m ()
-gameLoop turn = do
-    
-    liftIO beginTurn
+gameLoop turn = gameLoop' 0.0 where
 
-    line <- liftIO maybeLine 
-    let n = line >>= readTurn
-    
-    when (isJust n) $ do
-        
-        content <- liftIO $ readLines stdin readContent
-        orders <- turn (fromJust n) content
-        
-        liftIO $ mapM_ (putStrLn . orderString)  orders
-        gameLoop turn
+    gameLoop' total = do
+        liftIO beginTurn
+
+        line <- liftIO maybeLine 
+        let n = line >>= readTurn
+                
+        when (isJust n) $ do
+            
+            start <- liftIO getCPUTime
+            content <- liftIO $ readLines stdin readContent
+            orders <- turn (fromJust n) content
+            
+            liftIO $ mapM_ (putStrLn . orderString)  orders
+                    
+            end <- liftIO getCPUTime
+            let diff = (fromIntegral (end - start)) / (10^12)
+
+            let total' = total + diff
+            liftIO $ hPrintf stderr "Turn %d complete: %0.4f sec, %0.4f total\n" (fromJust n) (diff :: Float) (total' :: Float)
+                
+            gameLoop'  total' 
+            
+            
         
         

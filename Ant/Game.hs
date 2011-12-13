@@ -1,8 +1,8 @@
 module Ant.Game 
      ( GameState(..)
      , Game
-     , runGame
      , initialState
+     , updateState
      
      , module Ant.Point
      , module Ant.Square
@@ -13,8 +13,9 @@ module Ant.Game
      , module Ant.Passibility
      , module Ant.RegionStats
      , module Ant.Graph
-     , module Ant.Scheduler
-	 , module Ant.Movement
+     , module Ant.Diffusion
+     , module Ant.Search
+     , module Ant.Vector
      
      )
     where
@@ -33,14 +34,17 @@ import Ant.RegionBuilder
 import Ant.Passibility
 import Ant.RegionStats
 import Ant.Graph
-import Ant.Scheduler
-import Ant.Movement
+import Ant.Diffusion
+import Ant.Search
+import Ant.Vector
 
 import System.IO
 import System.Random
 import Debug.Trace
 
+
 type Game a = StateT GameState IO a
+
 
 
 data GameState = GameState
@@ -86,61 +90,42 @@ modifyMap f = modify $ \state -> state { gameMap = f (gameMap state) }
 modifyPass :: (Passibility -> Passibility) -> Game ()
 modifyPass f = modify $ \state -> state { gamePass = f (gamePass state) }
 
-updateState :: [SquareContent] -> Game [Order]
+updateState :: [SquareContent] -> Game ()
 updateState content = do
         
-	-- Update visibility and get changes in visibility
-	world <- gets gameMap
-	radiusSq <- getSetting viewRadius2
+    -- Update visibility and get changes in visibility
+    world <- gets gameMap
+    radiusSq <- getSetting viewRadius2
 
-	let ants = contentSquares (playerAnt 0) content
-	let vis = visibleSet (mapSize world) radiusSq ants
-	let dVis = newlyVisible vis world
+    let ants = contentSquares (playerAnt 0) content
+    let vis = visibleSet (mapSize world) radiusSq ants
+    let dVis = newlyVisible vis world
 
-	-- Initialise regions to start at the hills (first turn only)
-	n <- gets (numRegions . gameBuilder)
-	when (n == 0) $ modifyBuilder (initRegions content) 
+    -- Initialise regions to start at the hills (first turn only)
+    n <- gets (numRegions . gameBuilder)
+    when (n == 0) $ modifyBuilder (initRegions content) 
 
-	let world' = (updateContent content . updateVisibility vis) world
+    let world' = (updateContent content . updateVisibility vis) world
 
-	pass <- gets gamePass 
-	let pass' = updatePassibility dVis world' pass
+    pass <- gets gamePass 
+    let pass' = updatePassibility dVis world' pass
 
-	builder <- gets gameBuilder
-	let builder' = updateBuilder pass' world' builder
+    builder <- gets gameBuilder
+    let builder' = updateBuilder pass' world' builder
 
-	stats <- gets gameStats
+    stats <- gets gameStats
 
-	let graph = grCreate (regions builder')
-	let content' = filter (not . containsWater . snd) content
+    let graph = grCreate (regions builder')
 
-	let stats' = updateStats world' graph (regionMap builder') vis content' stats
-	let antTasks = scheduleAnts (regionMap builder') world stats' graph ants
+    let content' = filter (not . containsWater . snd) content
+    let stats' = updateStats world' graph (regionMap builder') vis content' stats
+
+    stats `seq` modify $ \gameState -> gameState 
+        { gameMap = world'
+        , gamePass = pass'
+        , gameBuilder = builder'
+        , gameStats = stats'
+        , gameGraph = graph
+        }
+
 	
-	liftIO $ hPrint stderr antTasks
-	
-	let moves = moveAnts (regionMap builder') world stats graph antTasks
-		
-
-	stats `seq` modify $ \gameState -> gameState 
-		{ gameMap = world'
-		, gamePass = pass'
-		, gameBuilder = builder'
-		, gameStats = stats'
-		, gameGraph = graph
-		}
-
-	return moves
-	
-processTurn :: Int -> [SquareContent] -> Game [Order]
-processTurn n content = do
-    
-    orders <- updateState content
-    return orders
-    
-    --orders <- liftM (map toEnum . randomRs (0, 3)) (liftIO getStdGen)
-    --return $ zip (map fst ants) orders
-
-
-runGame :: GameState -> IO GameState
-runGame = execStateT (gameLoop processTurn)

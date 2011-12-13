@@ -14,15 +14,7 @@ module Ant.Scheduler
     )
 where
 
-import Ant.Point
-import Ant.IO
-import Ant.Graph
-import Ant.RegionBuilder
-import Ant.Map
-import Ant.RegionStats
-import Ant.Search
-import Ant.Diffusion
-import Ant.Vector
+import Ant.Game
 
 import Data.List
 import Data.Function
@@ -45,32 +37,22 @@ type AntTask = (Point, Task)
 
 data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
 
-scheduleAnts :: RegionMap -> Map -> GameStats -> Graph -> [Point] -> [AntTask]
-scheduleAnts regionMap world stats graph ants = M.toList $ runReader (execStateT schedule antSet) ctx
-    where 
-        ctx = (Context world stats graph regionMap)
-        schedule = gatherFood >> diffuseAnts
-        antSet = initialSet ants
+scheduleAnts :: [Point] -> Game [AntTask]
+scheduleAnts ants = runScheduler ants $ gatherFood >> diffuseAnts >> gets (M.toList)
     
-runScheduler :: RegionMap -> Map -> GameStats -> Graph -> [Point] -> Scheduler a -> a
-runScheduler regionMap world stats graph ants schedule = runReader (evalStateT schedule antSet) ctx
+runScheduler :: [Point] -> Scheduler a -> Game a
+runScheduler ants schedule = evalStateT schedule antSet
     where 
-        ctx = (Context world stats graph regionMap)
         antSet = initialSet ants	
 	
     
 initialSet :: [Point] -> AntSet 
 initialSet ants = M.fromList (zip ants (repeat Unassigned))          
           
-data Context = Context 
-    { cWorld :: Map
-    , cStats :: GameStats
-    , cGraph :: Graph
-    , cRegionMap :: RegionMap
-    }
-    
-    
-type Scheduler = StateT AntSet (Reader Context)
+getGame :: (GameState -> a) -> Scheduler a
+getGame f = lift (gets f)
+  
+type Scheduler a = StateT AntSet (StateT GameState IO) a
 
 reserveAnt :: Point -> Task -> Scheduler ()
 reserveAnt point task = get >>=  put . (M.insert point task)
@@ -99,14 +81,15 @@ predNode node | (Just pred) <- snPred node = pred
 
 succRegion :: Graph -> GameStats -> SearchNode -> [SearchNode]
 succRegion graph stats = grSucc graph distance where
-    distance r r' e  = Just (round d)
+    distance r r' e  = Just (fromIntegral (edgeDistance e))
+        {-
         where    
             (our, enemy) = (gsRegionInfluence stats) `indexU`  r'
                         
             -- Modify distance by number of enemies, if there are a lot it is likely to be a logjam
             slow = 1.0 + 0.3 * enemy
             d    = slow * fromIntegral (edgeDistance e) 
-                     
+          -}           
 {-# INLINE succRegion #-}            
 
 assignedAnts :: Scheduler [Point]
@@ -115,7 +98,7 @@ assignedAnts = gets (map fst . M.toList . M.filter (/= Unassigned))
 testSearch :: Scheduler [Point]
 testSearch = do
    
-   {- numRegions <- asks  (grSize . cGraph)
+   {- numRegions <- getGame  (grSize . gameGraph)
     
     traceShow "Testsearch" $ return ()
     
@@ -139,11 +122,8 @@ testSearch = do
    
     
 freeAntsRegion :: RegionIndex -> Scheduler [Point]
-freeAntsRegion region = do 
-    stats <- asks cStats                                               
-    let rs = stats `gsRegion` region
-        
-    freeAnts (map fst . rcAnts . rsContent $ rs)
+freeAntsRegion region = getGame  (rcAnts  .  (`gsRegion` region) . gameStats)                                             
+
 {-# INLINE freeAntsRegion #-}
 
 
@@ -151,8 +131,8 @@ freeAntsRegion region = do
     
 findAnts :: forall a. (SearchNode -> Point ->  Maybe a) -> RegionIndex -> Int -> Distance -> Scheduler [a]
 findAnts f region minRequired maxDistance = do     
-    stats <- asks cStats
-    graph <- asks cGraph
+    stats <- getGame gameStats
+    graph <- getGame gameGraph
     
     let xs   = search (succRegion graph stats) snDistance region
     getAnts' xs 0 [] 
@@ -179,7 +159,7 @@ data AntDirection = AntDirection
 onPath :: Size -> Graph -> GameStats -> SearchNode -> Point -> AntDirection
 onPath size graph stats sn p = AntDirection p prevR distance where
     (SearchNode prevR prevD _) = predNode sn
-    rs = stats `gsRegion` (snKey sn)
+    
     prevCentre = regionCentre (graph `grIndex` prevR)
     distance = prevD + manhatten size p prevCentre
 {-# INLINE onPath #-}
@@ -190,18 +170,18 @@ getAnts = findAnts (\_ p -> Just p)
 getAntPaths :: RegionIndex -> Int -> Distance -> Scheduler [AntDirection]
 getAntPaths region numRequired maxDistance = do
     
-    toPath <- liftM3 onPath (asks (mapSize . cWorld)) (asks cGraph) (asks cStats)
+    toPath <- liftM3 onPath (getGame (mapSize . gameMap)) (getGame gameGraph) (getGame gameStats)
     ants   <- findAnts (\sn p -> Just (toPath sn p)) region numRequired maxDistance
     
     return $ take numRequired . sortBy (compare `on` adDistance) $ ants
     
                                        
 foodDistance :: Distance
-foodDistance = 20
+foodDistance = 6
 
 assignFood :: [Point] -> Point -> Scheduler ()
 assignFood ants  p = do
-	size <- asks (mapSize . cWorld)
+	size <- getGame (mapSize . gameMap)
 	ants' <- freeAnts ants
 
 	when (not . null $ ants') $ do
@@ -212,24 +192,25 @@ assignFood ants  p = do
 
 gatherFoodAt :: RegionIndex -> Scheduler ()
 gatherFoodAt region = do
-    food <- asks (rcFood . rsContent . (`gsRegion` region) . cStats)           
+    food <- getGame (rcFood . (`gsRegion` region) . gameStats)           
            
     when (length food > 0) $ do          
         -- Find some nearby ants        
-        ants <- getAnts region (length food + 2) foodDistance                
+        ants <- getAnts region (length food) foodDistance                
+        --ants <- freeAntsRegion region 
         forM_ food (assignFood ants)
             
         
 gatherFood :: Scheduler ()
 gatherFood = do
-    regions <- asks (grNodes . cGraph)
+    regions <- getGame (grNodes . gameGraph)
     mapM_ gatherFoodAt regions
     
 
 allFreeAnts ::Scheduler [Point]
 allFreeAnts = do 
-    (ants, _) <- asks (gsAnts . cStats)                                               
-    freeAnts (map fst ants)
+    (ants, _) <- getGame (gsAnts . gameStats)                                               
+    freeAnts ants
 {-# INLINE allFreeAnts #-}    
     
     
@@ -253,15 +234,12 @@ antDensity size numRegions regionMap ants = sumInfluence influenceScale numRegio
 
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
-    --ants <- allFreeAnts
-    
-    ants <- asks (map fst . fst . gsAnts . cStats)  
-    
-    
-    regions <- asks (grNodes . cGraph)
-    regionMap <- asks cRegionMap   
-    size <- asks (mapSize . cWorld) 
-    numRegions <- asks (grSize . cGraph)
+    (ants, _) <- getGame (gsAnts . gameStats)  
+        
+    regions <- getGame (grNodes . gameGraph)
+    regionMap <- getGame (regionMap . gameBuilder)
+    size <- getGame (mapSize . gameMap) 
+    numRegions <- getGame (grSize . gameGraph)
         
     let antDensities = antDensity size numRegions regionMap ants
         
@@ -271,7 +249,7 @@ diffuseAnts =  do
     let densityVec = U.fromList densities
     let passableVec = U.fromList passable
     
-    graph <- asks cGraph
+    graph <- getGame gameGraph
     let flow = flowGraph graph passableVec 
     
     let diffused = (diffuse 3.0 flow densityVec) !! 30
@@ -280,12 +258,10 @@ diffuseAnts =  do
     return ()
     
     
-
-    
 diffuseRegion :: FlowGraph -> U.Vector Float -> RegionIndex -> Scheduler ()
 diffuseRegion flow density region = do
     ants <- freeAntsRegion region
-    size <- asks (mapSize . cWorld)
+    size <- getGame (mapSize . gameMap)
     
     let antDests = flowParticles size flow density region ants
     forM_ antDests $ \(ant, dest) ->  reserveAnt ant (Goto dest)
@@ -293,7 +269,7 @@ diffuseRegion flow density region = do
     
 diffusableRegion :: RegionIndex -> Scheduler Bool
 diffusableRegion region = return True {- do 
-    stats <- asks cStats 
+    stats <- getGame gameStats 
 
     let enemyInfluence = snd . (`indexU` region) .  gsRegionInfluence $ stats
         return (enemyInfluence < 2) -} 
@@ -301,18 +277,17 @@ diffusableRegion region = return True {- do
         
 regionDensity :: Float -> RegionIndex -> Scheduler Float
 regionDensity antDensity region = do  
-    stats <- asks cStats 
+    stats <- getGame gameStats 
             
-    let lastVisible = rsLastVisible . (`gsRegion` region) $ stats
+    let lastVisible = gsVisited stats `indexU` region 
     let visibleMod = max (-0.1 * fromIntegral lastVisible) (-0.5)
 
-    frontier <- asks (regionFrontier . (`grIndex` region) . cGraph)
-    let frontierMod = if frontier then -1.5 else 0
+    frontier <- getGame (regionFrontier . (`grIndex` region) . gameGraph)
+    let frontierMod = if frontier then -0.9 else 0
     
     let rs = stats `gsRegion` region    
-    let foodMod = negate . fromIntegral . length . rcFood . rsContent $ rs
-    
-      
+    let foodMod = negate . fromIntegral . length . rcFood  $ rs
+  
     return $ antDensity * 0.05 + visibleMod + frontierMod + foodMod
 
 {-

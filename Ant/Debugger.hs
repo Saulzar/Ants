@@ -16,8 +16,7 @@ import Ant.Renderer
 import Ant.Scheduler
 import Ant.Diffusion
 
-import System.CPUTime
-import Text.Printf
+
 
 import Debug.Trace
 
@@ -29,15 +28,7 @@ smallMap :: Map
 smallMap = fromFunction (Size 40 40) f where
     f  = const landSquare   
 
-
-time :: IO t -> IO t
-time a = do
-    start <- getCPUTime
-    v <- a
-    end   <- getCPUTime
-    let diff = (fromIntegral (end - start)) / (10^12)
-    printf "Computation time: %0.3f sec\n" (diff :: Float)
-    return v        
+     
         {-
 main :: IO () 
 main = do
