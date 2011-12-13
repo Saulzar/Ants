@@ -114,14 +114,13 @@ flowParticles worldSize flowGraph densities region particles = flowParticles' ou
 -- Gauss Sidel diffusion, approximately from
 -- http://www.dgp.toronto.edu/people/stam/reality/Research/pdf/GDC03.pdf
 diffuse :: Float -> FlowGraph ->  U.Vector Float  -> [U.Vector Float]
-diffuse rate flow density0 = iterate diffuse' density0
-    where
-        diffuse' density' = U.imap (diffuseNode density') density0
+diffuse rate flow density0 = iterate diffuse' density0 where
+  diffuse' density' = U.imap (diffuseNode density') density0
     
-        diffuseNode density' i d = (d + rate * weighted) / (1.0 + rate * total) where       
-            weight (r, w, _) = (density' `indexU` r) * w
-            weighted = (U.sum . U.map weight) conn
-            (Node conn _ total) = flow `indexV` i
+  diffuseNode density' i d = (d + rate * weighted) / (1.0 + rate * total) where       
+    weight (r, w, _) = (density' `indexU` r) * w
+    weighted = (U.sum . U.map weight) conn
+    (Node conn _ total) = flow `indexV` i
             
             
 

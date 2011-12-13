@@ -11,6 +11,8 @@ module Ant.Map
     , noVisibility
     , visibleSet
     , influenceCount
+    , minDistanceMap
+    
     , circlePoints
     
     , updateVisibility
@@ -98,18 +100,20 @@ noVisibility :: Size -> U.Vector Bool
 noVisibility size = (U.replicate (area size) False)
 
 
-influenceCount :: Int -> Size -> Int -> [Point] -> U.Vector Int
-influenceCount spread size radiusSq ants = U.create $ do
+influenceCount :: Size -> Int -> [Point] -> U.Vector Int
+influenceCount size radiusSq ants = U.create $ do
     v <- UM.replicate (area size) 0
     
-    mapOffsets radiusSq ants $ \ant (Size x y) -> do
-       let i = wrapIndex size (ant `addSize` (Size (x * spread) (y * spread)))
+    mapOffsets radiusSq ants $ \ant offset -> do
+       let i = wrapIndex size (ant `addSize` offset)
         
        n <- UM.unsafeRead v i
        UM.unsafeWrite v i (n + 1)
      
     return v
-                
+
+
+   
 circlePoints :: Int -> [Size]
 circlePoints radiusSq =  [Size x y | x <- [-radius..radius], y <- [-radius..radius],  x * x + y * y <= radiusSq]
     where radius = ceiling (sqrt (fromIntegral radiusSq))       
@@ -118,9 +122,9 @@ circlePoints radiusSq =  [Size x y | x <- [-radius..radius], y <- [-radius..radi
 mapOffsets :: (Monad m) => Int -> [a] -> (a -> Size -> m ()) -> m ()
 mapOffsets radiusSq xs action = do
     forM_ xs $ \x -> do
-        forM_ offsets $ \offset -> action x offset         
-    where
-        offsets = circlePoints radiusSq  
+        forM_ offsets $ \offset -> action x offset  
+    
+    where offsets = circlePoints radiusSq  
     
        
 visibleSet :: Size -> Int -> [Point] -> U.Vector Bool

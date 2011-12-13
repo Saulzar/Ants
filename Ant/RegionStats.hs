@@ -98,6 +98,32 @@ gsRegion :: GameStats -> Int -> RegionContent
 gsRegion gs i = (gsRegions gs) `indexV` i
 {-# INLINE gsRegion #-}
         
+        
+potentialEnemies :: Map -> [Point] -> S.Set Point
+potentialEnemies world ants = foldr addValid S.empty ants where
+    addValid p s = foldr S.insert s (valid p)
+    valid p = filter (isLand . (world `at`)) .  map wrapPoint $ (p : neighbors p)
+        
+enemyDistanceMap :: Map -> Size -> Int -> [Point] -> U.Vector Int
+enemyDistanceMap world size distance ants = minDistanceMap size distance ants'
+    where ants' = S.toList $ potentialEnemies world ants 
+        
+minDistanceMap :: Size -> Int -> [Point] -> U.Vector Int
+minDistanceMap size distance ants = U.create $ do
+    v <- UM.replicate (area size) 1000
+    
+    forM_ xs $ \x -> do
+        forM_ offsets $ \(d, offset) -> $ do
+            let i = wrapIndex size (ant `addSize` offset)
+
+            d' <- UM.unsafeRead v i
+            UM.unsafeWrite v i (min d d')
+     
+    return v
+    
+    where offsets = [distPair x y | x <- [-distance..distance], y <- [-distance..distance]]
+          distPair x y = (sqrt (fromIntegral (x * x + y * y)), offset)        
+          
 {-
 updateFightRecords :: V.Vector RegionStats -> U.Vector (Int, Int) -> U.Vector (Int, Int)
 updateFightRecords regionStats frVec = U.modify update frVec where
