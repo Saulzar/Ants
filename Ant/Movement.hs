@@ -39,16 +39,31 @@ runMove move = evalStateT move moveState
 
 getGame :: (GameState -> a) -> Move a
 getGame f = lift (gets f)        
+{-# INLINE getGame #-}
 
-successor ::  Map -> SquareSet -> SearchNode -> [SearchNode]
-successor world occupied sn@(SearchNode p d prev) = map toNode . filter valid $ neighbors
-    where
-        neighbors = neighborIndices (mapSize world) p
-        valid p' = isLand (world `atIndex` p')           -- Land and not water (and we've seen it before)
-               && (d > 0 || S.notMember p' occupied)     -- Immediate neighbor is taken (avoid collisions)
-               
-        toNode p' = SearchNode p' (d + 1) (Just sn)
+successors :: Map -> (SearchNode -> PointIndex -> Maybe SearchNode) -> SearchNode -> [SearchNode]
+successors world gen sn = catMaybes . map (gen sn) $ neighbors
+    where neighbors = neighborIndices (mapSize world) (snKey sn)
+{-# INLINE successors #-}    
+
+validLand :: Map -> SquareSet -> PointIndex -> Distance -> Bool
+validLand world occupied p d = isLand (world `atIndex` p)              -- Land and not water (and we've seen it before)
+         && (d > 0 || S.notMember p occupied)     -- Immediate neighbor is taken (avoid collisions)
+    
+successor ::  Map -> SquareSet -> SearchNode -> PointIndex -> Maybe SearchNode
+successor world occupied sn p' | valid     = Just $ SearchNode p' (snDistance sn + 1) (Just sn) 
+                               | otherwise = Nothing
+    where valid = validLand world  occupied p' (snDistance sn)   
 {-# INLINE successor #-}
+        
+      
+successorInRegion :: RegionIndex -> RegionMap -> Map -> SquareSet -> SearchNode -> PointIndex ->  Maybe SearchNode
+successorInRegion region regionMap world occupied sn p | valid     = Just $ SearchNode p (snDistance sn + 1) (Just sn) 
+                                                        | otherwise = Nothing
+    where valid = validLand world occupied p (snDistance sn) && (region == fst (regionMap `indexU` p))
+{-# INLINE successorInRegion #-}
+        
+        
         
 -- For A-star
 metric :: Size -> Point -> SearchNode -> Float
@@ -145,33 +160,44 @@ searchLimit = 400
 findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
 findDest f = find f . take searchLimit 
 
+
+makeSuccessors :: Move (SearchNode -> [SearchNode])
+makeSuccessors = do
+    world <- getGame gameMap
+    occupied <- gets mReserved  
+    return $ successors world (successor world occupied)
+
 pathToPoint :: Point -> Point -> Move (Maybe SearchNode)
 pathToPoint source dest = do
-	nodes <- pathFind source dest 
-	size <- getGame (mapSize . gameMap)
-	
-	return $ findDest ((== dest) . fromIndex size . snKey) $ nodes
+    succ <- makeSuccessors   
+    nodes <- pathFind succ source dest 
+
+    size <- getGame (mapSize . gameMap)
+    return $ findDest ((== dest) . fromIndex size . snKey) $ nodes
 	
 pathToFood :: Point -> Point -> Move (Maybe SearchNode)
 pathToFood source dest = do
-        nodes <- pathFind source dest 
-        world <- getGame gameMap
+        succ <- makeSuccessors
+        nodes <- pathFind succ source dest 
         
+        world <- getGame gameMap
         return $ findDest (hasFood . (world `atIndex`) . snKey) $ nodes	
 	
 pathToRegion ::  Point -> RegionIndex -> Move (Maybe SearchNode)
 pathToRegion source region = do
-	regionMap <- getGame (regionMap . gameBuilder)
-	dest <- getGame (regionCentre . (`grIndex` region) . gameGraph)
-	nodes <- pathFind source dest 
-	
-	return $ findDest ((== region) . nodeRegion regionMap)  $ nodes
-	
-pathFind :: Point -> Point -> Move [SearchNode]
-pathFind source dest = do
+    regionMap <- getGame (regionMap . gameBuilder)
+    dest <- getGame (regionCentre . (`grIndex` region) . gameGraph)
     world <- getGame gameMap
-    occupied <- gets mReserved    
-    return $ search (successor world occupied) (metric (mapSize world) dest)  (mapSize world `wrapIndex` source)
+    occupied <- gets mReserved   
+
+    nodes <- pathFind (successors world (successorInRegion region regionMap world occupied)) source dest 
+    return $ findDest ((== region) . nodeRegion regionMap)  $ nodes
+	
+pathFind :: (SearchNode -> [SearchNode]) -> Point -> Point -> Move [SearchNode]
+pathFind succ source dest = do
+    world <- getGame gameMap
+ 
+    return $ search succ (metric (mapSize world) dest)  (mapSize world `wrapIndex` source)
 
     
         

@@ -44,8 +44,7 @@ scheduleAnts ants = runScheduler ants $ gatherFood >> diffuseAnts >> gets (M.toL
     
 runScheduler :: [Point] -> Scheduler a -> Game a
 runScheduler ants schedule = evalStateT schedule antSet
-    where 
-        antSet = initialSet ants	
+    where antSet = initialSet ants	
 	
     
 initialSet :: [Point] -> AntSet 
@@ -53,6 +52,7 @@ initialSet ants = M.fromList (zip ants (repeat Unassigned))
           
 getGame :: (GameState -> a) -> Scheduler a
 getGame f = lift (gets f)
+{-# INLINE getGame #-}
   
 type Scheduler a = StateT AntSet (StateT GameState IO) a
 
