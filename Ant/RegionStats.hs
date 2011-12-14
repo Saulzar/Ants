@@ -147,7 +147,7 @@ splitEnemy = partition ( (== 0) . snd )
                         
 
 updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
-updateStats world graph regionMap vis content stats = gsEnemyDistances `seq` stats
+updateStats world graph regionMap vis content stats = enemyDistances `seq` stats
         { gsRegions     = regionContent'
         , gsHills       = hills
         , gsHillDistances = regionDistances

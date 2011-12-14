@@ -2,8 +2,11 @@
 
 module Ant.Point where
 
-data Point = Point   {-# UNPACK #-}   !Int
-                     {-# UNPACK #-}   !Int deriving (Show, Ord, Eq)
+data Point = Point 
+    { pointX ::  {-# UNPACK #-} !Int
+    , pointY ::  {-# UNPACK #-} !Int 
+    } 
+      deriving (Show, Ord, Eq)
 
 
 data Size = Size    {-# UNPACK #-}   !Int

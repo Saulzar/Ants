@@ -263,14 +263,14 @@ flowDensity :: Scheduler (U.Vector Float, FlowGraph)
 flowDensity = do
 
     rDensity   <- regionDensity
-    aDensity   <- antDensity
+   -- aDensity   <- antDensity
         
     flowGraph         <- makeFlowGraph 
     
-    let diffuseRegions = diffuse 3.0 flowGraph rDensity  !! 30 
-    let diffuseAnts    = U.map (* 0.1) $ diffuse 1.0 flowGraph aDensity  !! 4
+    let diffuseRegions = diffuse 1.0 flowGraph rDensity  !! 30 
+    --let diffuseAnts    = U.map (* 0.2) $ diffuse 4.0 flowGraph aDensity  !! 8
     
-    return (U.zipWith (+) diffuseRegions diffuseAnts, flowGraph)
+    return (diffuseRegions, flowGraph) --(U.zipWith (+) diffuseRegions diffuseAnts, flowGraph)
         
 diffuseAnts :: Scheduler ()
 diffuseAnts =  do
@@ -305,17 +305,19 @@ regionDensity = do
 regionDensity' ::  RegionIndex -> Scheduler Float
 regionDensity' region = do  
     stats <- getGame gameStats 
+    graph <- getGame gameGraph
             
     let lastVisible = gsVisited stats `indexU` region 
-    let visibleMod = max (-0.1 * fromIntegral lastVisible) (-0.5)
+    let visibleMod = max (-0.1 * fromIntegral (max (lastVisible - 10) 0)) (-1.0)
 
     frontier <- getGame (regionFrontier . (`grIndex` region) . gameGraph)
-    let frontierMod = if frontier then -0.8 else 0
+    let frontierMod = if frontier then -1.0 else 0
     
     let rs = stats `gsRegion` region    
     let foodMod = negate . fromIntegral . length . rcFood  $ rs
   
-    return $ visibleMod + frontierMod + 2.0 * foodMod 
+  
+    return $  4.0 * frontierMod + visibleMod 
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

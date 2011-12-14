@@ -16,6 +16,9 @@ import Control.Monad.State.Strict
 import Ant.Scheduler
 import Ant.Game
 
+import Text.Printf
+import System.IO
+
 import Debug.Trace
 
 import qualified Data.IntSet as S
@@ -55,15 +58,6 @@ successor world occupied sn p' | valid     = Just $ SearchNode p' (snDistance sn
                                | otherwise = Nothing
     where valid = validLand world  occupied p' (snDistance sn)   
 {-# INLINE successor #-}
-        
-      
-successorInRegion :: RegionIndex -> RegionMap -> Map -> SquareSet -> SearchNode -> PointIndex ->  Maybe SearchNode
-successorInRegion region regionMap world occupied sn p | valid     = Just $ SearchNode p (snDistance sn + 1) (Just sn) 
-                                                        | otherwise = Nothing
-    where valid = validLand world occupied p (snDistance sn) && (region == fst (regionMap `indexU` p))
-{-# INLINE successorInRegion #-}
-        
-        
         
 -- For A-star
 metric :: Size -> Point -> SearchNode -> Float
@@ -182,16 +176,31 @@ pathToFood source dest = do
         
         world <- getGame gameMap
         return $ findDest (hasFood . (world `atIndex`) . snKey) $ nodes	
-	
+
+makeSuccessor :: Bool -> SearchNode -> PointIndex -> Maybe SearchNode 
+makeSuccessor False _ _ = Nothing
+makeSuccessor True sn p = Just $ SearchNode p (snDistance sn + 1) (Just sn)        
+        
 pathToRegion ::  Point -> RegionIndex -> Move (Maybe SearchNode)
-pathToRegion source region = do
+pathToRegion sourcePoint destRegion = do
     regionMap <- getGame (regionMap . gameBuilder)
-    dest <- getGame (regionCentre . (`grIndex` region) . gameGraph)
+    destPoint <- getGame (regionCentre . (`grIndex` destRegion) . gameGraph)
     world <- getGame gameMap
     occupied <- gets mReserved   
 
-    nodes <- pathFind (successors world (successorInRegion region regionMap world occupied)) source dest 
-    return $ findDest ((== region) . nodeRegion regionMap)  $ nodes
+    let (sourceRegion, _) = regionMap `indexU` (mapSize world `wrapIndex` sourcePoint)     
+    let successor sn p = makeSuccessor valid sn p where
+            valid  = validLand world occupied p (snDistance sn) && (region == sourceRegion || region == destRegion)
+            region = fst (regionMap `indexU` p)
+
+    
+    nodes <- pathFind (successors world successor) sourcePoint destPoint 
+    let dest = findDest ((== destRegion) . nodeRegion regionMap)  $ nodes
+
+    when (not . isJust $ dest) $
+        liftIO $ hPrintf stderr "Failed to pathfind region %d -> %d,  from (%d %d)" sourceRegion destRegion (pointX sourcePoint) (pointY sourcePoint)
+        
+    return dest
 	
 pathFind :: (SearchNode -> [SearchNode]) -> Point -> Point -> Move [SearchNode]
 pathFind succ source dest = do
@@ -204,7 +213,7 @@ pathFind succ source dest = do
 moveAnt :: Point -> Task -> Move ()
 moveAnt p (Goto r)      = pathToRegion p r >>= makeMove p
 moveAnt p (Gather p')   = pathToFood p p' >>= makeMove p
-moveAnt p _ = anyMove p
+moveAnt p t = traceShow t $ anyMove p
 
     
 moveAnts' :: [AntTask] -> Move ()
