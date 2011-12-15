@@ -37,7 +37,7 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 type AntSet = M.Map Point Task
 type AntTask = (Point, Task)
 
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard !Float | Retreat deriving (Eq, Show)
 
 scheduleAnts :: [Point] -> Game [AntTask]
 scheduleAnts ants = runScheduler ants $ gatherFood >> diffuseAnts >> gets (M.toList)
@@ -300,7 +300,24 @@ regionDensity :: Scheduler (U.Vector Float)
 regionDensity = do
     regions <- getGame (U.fromList . grNodes . gameGraph) 
     U.forM regions $ \r -> regionDensity' r
-                
+        
+
+engageAnts :: Scheduler ()
+engageAnts = do
+    regions <- getGame (grNodes . gameGraph)
+    mapM_ engageRegion regions
+
+        
+engageRegion ::  RegionIndex -> Scheduler ()
+engageRegion region = do
+    ants <- freeAntsRegion region
+    distances <- getGame (gsEnemyDistances . gameStats)
+    size      <- getGame (mapSize . gameMap)
+    
+    forM_ ants $ \ant -> do
+        let distance = distances `indexU` (size `wrapIndex` ant)
+        when (distance < 8) $ reserveAnt ant (Guard distance)
+
         
 regionDensity' ::  RegionIndex -> Scheduler Float
 regionDensity' region = do  
@@ -315,9 +332,8 @@ regionDensity' region = do
     
     let rs = stats `gsRegion` region    
     let foodMod = negate . fromIntegral . length . rcFood  $ rs
-  
-  
-    return $  4.0 * frontierMod + visibleMod 
+    
+    return $  4.0 * frontierMod  
 
 {-
 getAnts :: [SearchNode] -> GameStats -> [(Point, Distance)]

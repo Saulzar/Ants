@@ -22,6 +22,9 @@ wrap (Size width height) (Point x y) = Point (x `mod` width) (y `mod` height)
 addSize :: Point -> Size -> Point
 addSize (Point x y) (Size dx dy) = Point (x + dx) (y + dy)
 
+addSizes :: Size -> Size -> Size
+addSizes (Size x y) (Size x' y') = Size (x + x') (y + y')
+
 subSize :: Point -> Size -> Point
 subSize (Point x y) (Size dx dy) = Point (x - dx) (y - dy)
 

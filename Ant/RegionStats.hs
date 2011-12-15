@@ -68,8 +68,9 @@ data GameStats = GameStats
     , gsContent         :: [SquareContent]     
     
     , gsVisited         :: U.Vector Int
-    , gsEnemyDistances  :: U.Vector Float
     
+    , gsEnemyDistances  :: U.Vector Float
+    , gsEnemyInfluence  :: U.Vector Int
     
     } deriving Show
 
@@ -87,6 +88,7 @@ initialStats = GameStats
     , gsVisited         = U.empty
     , gsContent             = []
     , gsEnemyDistances      = U.empty
+    , gsEnemyInfluence      = U.empty
     }
     
     
@@ -146,8 +148,8 @@ splitEnemy :: AntList -> (AntList, AntList)
 splitEnemy = partition ( (== 0) . snd )
                         
 
-updateStats :: Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
-updateStats world graph regionMap vis content stats = enemyDistances `seq` stats
+updateStats :: GameSettings -> Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
+updateStats settings world graph regionMap vis content stats = enemyDistances `seq` stats
         { gsRegions     = regionContent'
         , gsHills       = hills
         , gsHillDistances = regionDistances
@@ -155,6 +157,7 @@ updateStats world graph regionMap vis content stats = enemyDistances `seq` stats
         , gsVisited     = updateVisited regionContent' (gsVisited stats)
         , gsContent     = content'
         , gsEnemyDistances = enemyDistances
+        --, gsEnemyInfluence = enemyInfluence
         }
         where
 
@@ -173,7 +176,9 @@ updateStats world graph regionMap vis content stats = enemyDistances `seq` stats
             
             regionContent'  = regionContent (mapSize world) graph regionMap content'
             
-            enemyDistances = enemyDistanceMap world 5 (map fst enemyAnts)
+            attackRadius = sqrt  . fromIntegral . attackRadius2 $ settings
+            enemyDistances = enemyDistanceMap world 6 (map fst enemyAnts)
+          --  enemyInfluence = 
         
 addContent :: RegionContent -> SquareContent -> RegionContent
 addContent rc (p, Ant 0)     = rc { rcAnts    = p : rcAnts rc }
@@ -205,6 +210,9 @@ regionVisibility numRegions regionMap visible = U.create $ do
             n <- readU v region
             writeU v region (n + 1)   
         return v
+
+        
+  
 
 
 sumRegionInfluence :: Float -> Int -> RegionMap -> U.Vector (Int, Int) -> U.Vector (Float, Float)

@@ -16,6 +16,7 @@ module Ant.Game
      , module Ant.Diffusion
      , module Ant.Search
      , module Ant.Vector
+     , module Ant.Influence
      
      )
     where
@@ -37,6 +38,7 @@ import Ant.Graph
 import Ant.Diffusion
 import Ant.Search
 import Ant.Vector
+import Ant.Influence
 
 import System.IO
 import System.Random
@@ -54,6 +56,8 @@ data GameState = GameState
     , gamePass          :: Passibility
     , gameStats         :: GameStats
     , gameGraph         :: Graph
+    , gameAttackTable   :: InfluenceTable
+    , gameDistanceTable :: DistanceTable
     }
 
  
@@ -65,8 +69,12 @@ initialState settings = GameState
     , gamePass        = emptyPassibility (mapDimensions settings) pattern2
     , gameStats       = initialStats 
     , gameGraph       = grEmpty
+    
+    , gameAttackTable = makeInfluenceTable (attackRadius2 settings)
+    , gameDistanceTable = makeDistanceTable (engagementDist * engagementDist)
     }
- 
+    where
+        engagementDist = 6
  
 getSetting :: (GameSettings -> a) -> Game a
 getSetting f = gets (f . gameSettings) 
@@ -95,10 +103,10 @@ updateState content = do
         
     -- Update visibility and get changes in visibility
     world <- gets gameMap
-    radiusSq <- getSetting viewRadius2
+    settings <- gets gameSettings 
 
     let ants = contentSquares (playerAnt 0) content
-    let vis = visibleSet (mapSize world) radiusSq ants
+    let vis = visibleSet (mapSize world) (viewRadius2 settings) ants
     let dVis = newlyVisible vis world
 
     -- Initialise regions to start at the hills (first turn only)
@@ -118,7 +126,7 @@ updateState content = do
     let graph = grCreate (regions builder')
 
     let content' = filter (not . containsWater . snd) content
-    let stats' = updateStats world' graph (regionMap builder') vis content' stats
+    let stats' = updateStats settings world' graph (regionMap builder') vis content' stats
 
     stats `seq` modify $ \gameState -> gameState 
         { gameMap = world'
