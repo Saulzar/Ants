@@ -24,6 +24,7 @@ import Ant.RegionBuilder
 import Ant.IO
 import Ant.Square
 import Ant.Vector
+import Ant.Influence
 
 import Ant.Graph
 
@@ -69,18 +70,17 @@ data GameStats = GameStats
     
     , gsVisited         :: U.Vector Int
     
-    , gsEnemyDistances  :: U.Vector Float
+    , gsEnemyDistances  :: U.Vector (Float, PointIndex)
     , gsEnemyInfluence  :: U.Vector Int
+    
+    , gsAttackTable   :: InfluenceTable
+    , gsDistanceTable :: DistanceTable
     
     } deriving Show
 
 
     
-maxPlayers :: Int
-maxPlayers = 20
-        
-    
-initialStats = GameStats
+initialStats settings = GameStats
     { gsRegions = V.empty
     , gsHills           = S.empty
     , gsHillDistances   = U.empty
@@ -89,7 +89,12 @@ initialStats = GameStats
     , gsContent             = []
     , gsEnemyDistances      = U.empty
     , gsEnemyInfluence      = U.empty
+    
+    , gsAttackTable   = makeInfluenceTable (attackRadius2 settings)
+    , gsDistanceTable = makeDistanceTable (engagementDist * engagementDist)    
     }
+    where
+        engagementDist = 6
     
     
 updateHillSet :: Map -> [SquareContent] -> S.Set (Point, Player) -> S.Set (Point, Player)
@@ -103,30 +108,7 @@ gsRegion gs i = (gsRegions gs) `indexV` i
 {-# INLINE gsRegion #-}
         
         
-potentialEnemies :: Map -> [Point] -> S.Set Point
-potentialEnemies world ants = foldr addValid S.empty ants where
-    addValid p s = foldr S.insert s (valid p)
-    valid p = filter (isLand . (world `at`)) .  map (wrapPoint (mapSize world)) $ (p : neighbors p)
-        
-enemyDistanceMap :: Map -> Int -> [Point] -> U.Vector Float
-enemyDistanceMap world distance ants = minDistanceMap (mapSize world) distance ants'
-    where ants' = S.toList $ potentialEnemies world ants 
-        
-minDistanceMap :: Size -> Int -> [Point] -> U.Vector Float
-minDistanceMap size distance ants = U.create $ do
-    v <- UM.replicate (area size) 1000
     
-    forM_ ants $ \ant -> do
-        forM_ offsets $ \(d, offset) ->  do
-            let i = wrapIndex size (ant `addSize` offset)
-
-            d' <- UM.unsafeRead v i
-            UM.unsafeWrite v i (min d d')
-     
-    return v
-    
-    where offsets = [distPair x y | x <- [-distance..distance], y <- [-distance..distance]]
-          distPair x y = (sqrt (fromIntegral (x * x + y * y)), Size x y)        
           
 {-
 updateFightRecords :: V.Vector RegionStats -> U.Vector (Int, Int) -> U.Vector (Int, Int)
@@ -149,7 +131,7 @@ splitEnemy = partition ( (== 0) . snd )
                         
 
 updateStats :: GameSettings -> Map -> Graph -> RegionMap -> U.Vector Bool -> [SquareContent] -> GameStats -> GameStats
-updateStats settings world graph regionMap vis content stats = enemyDistances `seq` stats
+updateStats settings world graph regionMap vis content stats = enemyInfluence `seq` enemyDistances `seq` stats
         { gsRegions     = regionContent'
         , gsHills       = hills
         , gsHillDistances = regionDistances
@@ -157,7 +139,7 @@ updateStats settings world graph regionMap vis content stats = enemyDistances `s
         , gsVisited     = updateVisited regionContent' (gsVisited stats)
         , gsContent     = content'
         , gsEnemyDistances = enemyDistances
-        --, gsEnemyInfluence = enemyInfluence
+        , gsEnemyInfluence = enemyInfluence
         }
         where
 
@@ -176,9 +158,11 @@ updateStats settings world graph regionMap vis content stats = enemyDistances `s
             
             regionContent'  = regionContent (mapSize world) graph regionMap content'
             
-            attackRadius = sqrt  . fromIntegral . attackRadius2 $ settings
-            enemyDistances = enemyDistanceMap world 6 (map fst enemyAnts)
-          --  enemyInfluence = 
+            enemyDistances = makeDistanceMap world (gsDistanceTable stats) (map fst enemyAnts)
+            enemyInfluence = makeInfluenceMap world (gsAttackTable stats) (map fst enemyAnts)
+
+            
+            
         
 addContent :: RegionContent -> SquareContent -> RegionContent
 addContent rc (p, Ant 0)     = rc { rcAnts    = p : rcAnts rc }

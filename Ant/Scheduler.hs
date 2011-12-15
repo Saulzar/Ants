@@ -37,10 +37,11 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 type AntSet = M.Map Point Task
 type AntTask = (Point, Task)
 
-data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard !Float | Retreat deriving (Eq, Show)
+data Task  = Unassigned | Goto !RegionIndex | Gather !Point | Guard | Retreat deriving (Eq, Show)
 
 scheduleAnts :: [Point] -> Game [AntTask]
-scheduleAnts ants = runScheduler ants $ gatherFood >> diffuseAnts >> gets (M.toList)
+scheduleAnts ants = runScheduler ants $ 
+    gatherFood >> engageAnts >> diffuseAnts >> gets (M.toList)
     
 runScheduler :: [Point] -> Scheduler a -> Game a
 runScheduler ants schedule = evalStateT schedule antSet
@@ -307,16 +308,22 @@ engageAnts = do
     regions <- getGame (grNodes . gameGraph)
     mapM_ engageRegion regions
 
+    
+    
         
 engageRegion ::  RegionIndex -> Scheduler ()
-engageRegion region = do
-    ants <- freeAntsRegion region
+engageRegion r = do
+    ants <- freeAntsRegion r
     distances <- getGame (gsEnemyDistances . gameStats)
     size      <- getGame (mapSize . gameMap)
+    graph     <- getGame gameGraph
+    regions   <- getGame (regionMap . gameBuilder)
     
     forM_ ants $ \ant -> do
-        let distance = distances `indexU` (size `wrapIndex` ant)
-        when (distance < 8) $ reserveAnt ant (Guard distance)
+        let (d, p) = distances `indexU` (size `wrapIndex` ant)
+        let (r', _) = regions `indexU` p 
+        
+        when (d < 8 && (grNeighbor r r' graph || r == r')) $ reserveAnt ant (Guard)
 
         
 regionDensity' ::  RegionIndex -> Scheduler Float

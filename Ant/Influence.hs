@@ -1,9 +1,11 @@
 module Ant.Influence 
-    ( countInfluences
-    , lookupInfluence
+    ( lookupInfluence
     
     , makeInfluenceTable
     , makeDistanceTable
+    
+    , makeInfluenceMap
+    , makeDistanceMap
     
     , moveIndex
     , DistanceTable
@@ -68,23 +70,43 @@ moveIndex world p = foldr (.|.) 0 offsets where
     offsets = map fst . filter (isLand . (world `at`) . (p `addSize`) . snd) $ offsetTable
 {-# INLINE moveIndex #-}    
     
-lookupInfluence :: Map -> Point -> InfluenceTable -> U.Vector (Int, Int)
+lookupInfluence :: Map -> Point -> V.Vector a -> a
 lookupInfluence world p table = table `indexV` moveIndex world p
-
-    
 {-# INLINE lookupInfluence #-}    
     
-countInfluences :: [Point] -> Map -> InfluenceTable -> U.Vector Int
-countInfluences ants world table = U.create $ do
+addOffset :: Point -> Point' -> Point
+addOffset (Point x y) (x', y') = Point (x + x') (y + y')        
+{-# INLINE addOffset #-} 
+   
+    
+makeInfluenceMap :: Map -> InfluenceTable -> [Point] -> U.Vector Int
+makeInfluenceMap  world table ants = U.create $ do
     v <- UM.replicate (area (mapSize world)) 0
    
     forM_ ants $ \ant -> do
         let offsets = lookupInfluence world ant table
         U.forM_ offsets $ \o -> do
             let i = mapSize world `wrapIndex` (ant `addOffset` o)
-            n <- UM.unsafeRead v i
-            UM.unsafeWrite v i (n + 1)
+            n <- readU v i
+            writeU v i (n + 1)
      
     return v      
-        where addOffset (Point x y) (x', y') = Point (x + x') (y + y')
+        
     
+    
+makeDistanceMap ::  Map ->  DistanceTable -> [Point] -> U.Vector (Float, PointIndex)
+makeDistanceMap world table ants = U.create $ do
+    v <- UM.replicate (area (mapSize world))  (1000.0, 0)       
+    
+    
+    forM_ ants $ \ant -> do
+        let offsets = lookupInfluence world ant table
+        U.forM_ offsets $ \(o, d) -> do     
+            let i = toIndex (ant `addOffset` o)
+            d' <- readU v i
+            writeU v i (min (d, toIndex ant )  d')
+    return v
+
+        where toIndex = (mapSize world `wrapIndex`)
+
+

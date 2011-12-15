@@ -56,8 +56,6 @@ data GameState = GameState
     , gamePass          :: Passibility
     , gameStats         :: GameStats
     , gameGraph         :: Graph
-    , gameAttackTable   :: InfluenceTable
-    , gameDistanceTable :: DistanceTable
     }
 
  
@@ -67,14 +65,10 @@ initialState settings = GameState
     , gameMap         = emptyMap unknownSquare (mapDimensions settings) 
     , gameBuilder     = emptyBuilder (mapDimensions settings) 32
     , gamePass        = emptyPassibility (mapDimensions settings) pattern2
-    , gameStats       = initialStats 
+    , gameStats       = initialStats settings
     , gameGraph       = grEmpty
-    
-    , gameAttackTable = makeInfluenceTable (attackRadius2 settings)
-    , gameDistanceTable = makeDistanceTable (engagementDist * engagementDist)
     }
-    where
-        engagementDist = 6
+
  
 getSetting :: (GameSettings -> a) -> Game a
 getSetting f = gets (f . gameSettings) 

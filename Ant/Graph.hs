@@ -6,6 +6,7 @@ module Ant.Graph
     , grCreate
     , grNeighbors
     , grEdge
+    , grNeighbor
     , grEdges
     , grEdgeIndices
     , grIndex
@@ -59,6 +60,12 @@ grEdge :: RegionIndex -> RegionIndex -> Graph -> Maybe Edge
 grEdge r r' graph = M.lookup r' (regionNeighbors region)
     where region = graph `grIndex` r
 {-# INLINE grEdge #-}        
+
+grNeighbor :: RegionIndex -> RegionIndex -> Graph -> Bool
+grNeighbor r r' graph = M.member r' (regionNeighbors region)
+    where region = graph `grIndex` r
+{-# INLINE grNeighbor #-}        
+
         
 grEdges :: RegionIndex -> Graph -> [(RegionIndex, Edge)]
 grEdges r graph = neighbors' region
