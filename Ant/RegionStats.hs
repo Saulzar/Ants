@@ -94,7 +94,7 @@ initialStats settings = GameStats
     , gsDistanceTable = makeDistanceTable (engagementDist * engagementDist)    
     }
     where
-        engagementDist = 6
+        engagementDist = 8
     
     
 updateHillSet :: Map -> [SquareContent] -> S.Set (Point, Player) -> S.Set (Point, Player)

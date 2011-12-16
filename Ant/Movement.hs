@@ -49,14 +49,14 @@ successors world gen sn = catMaybes . map (gen sn) $ neighbors
     where neighbors = neighborIndices (mapSize world) (snKey sn)
 {-# INLINE successors #-}    
 
-validLand :: Map -> SquareSet -> PointIndex -> Distance -> Bool
-validLand world occupied p d = isLand (world `atIndex` p)              -- Land and not water (and we've seen it before)
+validLand :: Map -> SquareSet -> PointIndex -> Bool
+validLand world occupied p = isLand (world `atIndex` p)              -- Land and not water (and we've seen it before)
 
     
 successor ::  Map -> SquareSet -> SearchNode -> PointIndex -> Maybe SearchNode
 successor world occupied sn p' | valid     = Just $ SearchNode p' (snDistance sn + 1) (Just sn) 
                                | otherwise = Nothing
-    where valid = validLand world  occupied p' (snDistance sn)   
+    where valid = validLand world  occupied p'  
 {-# INLINE successor #-}
         
  
@@ -134,7 +134,7 @@ makeMove :: Point -> Maybe SearchNode -> Move ()
 makeMove p Nothing   = anyMove p
 makeMove p (Just sn) = makeMove' (searchPath sn)
     where 
-            makeMove' (_ : next : _) = do
+            makeMove' (next : _) = do
                     size <- getGame (mapSize . gameMap)
                     let p' = fromIndex size next
                     
@@ -150,11 +150,11 @@ findDest :: (SearchNode -> Bool) -> [SearchNode] -> Maybe SearchNode
 findDest f = find f . take searchLimit 
 
 
-makeSuccessors :: Move (SearchNode -> [SearchNode])
+makeSuccessors :: Move (SearchNode -> PointIndex -> Maybe SearchNode)
 makeSuccessors = do
     world <- getGame gameMap
     occupied <- gets mReserved  
-    return $ successors world (successor world occupied)
+    return $ (successor world occupied)
 
 pathToPoint :: Point -> Point -> Move (Maybe SearchNode)
 pathToPoint source dest = do
@@ -188,13 +188,13 @@ pathToRegion sourcePoint destRegion = do
     let (sourceRegion, _) = regionMap `indexU` (mapSize world `wrapIndex` sourcePoint)     
     let successor sn p | valid     = Just $ SearchNode p (snDistance sn + 1) (Just sn) 
                        | otherwise = Nothing where
-            valid  = validLand world occupied p (snDistance sn) 
+            valid  = validLand world occupied p
                   && (region == sourceRegion || region == destRegion)
             region = fst (regionMap `indexU` p)
 
     metric <- distanceMetric destPoint
             
-    nodes <- pathFind (successors world successor) metric sourcePoint 
+    nodes <- pathFind successor metric sourcePoint 
     return $ findDest ((== destRegion) . nodeRegion regionMap)  $ nodes
     
     
@@ -207,24 +207,29 @@ pathToFight source minDistance = do
     
     let successor sn p | valid      = Just $ SearchNode p d' (Just sn)
                        | otherwise  = Nothing where
-            valid  = validLand world occupied p d'
-                  && (fst (distanceMap `indexU` p) > minDistance)
+            valid  = validLand world occupied p
+                  && (fst (distanceMap `indexU` p) >= minDistance)
                   && d < 6
                 
             d = snDistance sn    
             d' | d > 0 && isAnt (world `atIndex` p) = d + 2
                | otherwise = d + 1
               
-    let heuristic (SearchNode p d _) = enemyDistance + fromIntegral d * 0.2 - proximity * 0.4
+    let heuristic (SearchNode p d _) = enemyDistance -- + fromIntegral d * 0.2 - proximity * 0.4
             where 
                 enemyDistance = fst (distanceMap `indexU` p) - minDistance
                 neighbors = neighborIndices (mapSize world) p
                 proximity = fromIntegral . length . filter (flip S.member occupied) $ neighbors
 
-    nodes <- pathFind (successors world successor) snDistance source
+    nodes <- pathFind successor snDistance source
     case nodes of 
-        [] -> return Nothing
-        _  -> return . Just . minimumBy (compare `on` heuristic) $ nodes
+        [] -> traceShow "Not found!" $ return Nothing
+        _  -> do 
+            let best = minimumBy (compare `on` heuristic) $ nodes 
+            let dist = fst . (distanceMap `indexU`) . snKey $ best 
+            
+            liftIO $ print (best, dist, minDistance)
+            return . Just $ best
         
 
 -- For A-star
@@ -236,21 +241,25 @@ distanceMetric dest =  do
     return $ \(SearchNode index' d _) -> (fromIntegral d) + distanceIndex size index index'
     
         
-pathFind :: Ord m => (SearchNode -> [SearchNode]) -> (SearchNode -> m) -> Point -> Move [SearchNode]
+pathFind :: Ord m => (SearchNode -> PointIndex -> Maybe SearchNode) -> (SearchNode -> m) -> Point -> Move [SearchNode]
 pathFind succ metric source = do
     world <- getGame gameMap
  
     let p = mapSize world `wrapIndex` source
     let seeds = p : neighborIndices (mapSize world) p 
  
-    return $ searchN succ metric seeds
+    return $ searchN (successors world succ) metric seeds
 
     
         
 moveAnt :: Point -> Task -> Move ()
 moveAnt p (Goto r)      = pathToRegion p r >>= makeMove p
 moveAnt p (Gather p')   = pathToFood p p' >>= makeMove p
-moveAnt p t = traceShow t $ anyMove p
+moveAnt p (Guard _)       = do
+    --radius <- getGame (fromIntegral . attackRadius2 . gameSettings)
+    pathToFight p 5 >>= makeMove p
+    
+moveAnt p t = anyMove p
 
     
 moveAnts' :: [AntTask] -> Move ()

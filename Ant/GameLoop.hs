@@ -12,6 +12,7 @@ import Ant.Scheduler
 import Ant.Movement
 
 import Control.Monad.State.Strict
+import System.IO
 
 
 processTurn :: Int -> [SquareContent] -> Game [Order]
@@ -20,6 +21,8 @@ processTurn n content = do
     updateState content
     
     tasks <- gets (fst . gsAnts . gameStats) >>= scheduleAnts 
+    --liftIO $ hPrint stderr tasks 
+    
     orders <- moveAnts tasks
 
     return orders

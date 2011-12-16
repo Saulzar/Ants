@@ -120,6 +120,8 @@ renderTasks size graph ants = do
             where p' = regionCentre (graph `grIndex` r)
             
         renderTask (p, Gather food) = setColour lightgreen >>  drawAnt p >> setColour black >> wrapLine size p food
+        renderTask (p, Guard enemy) = setColour red >>  drawAnt p >> setColour black >> wrapLine size p enemy
+        
         renderTask (p, _) = setColour gray >> drawAnt p
  
  

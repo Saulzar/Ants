@@ -135,7 +135,7 @@ renderInWindow win state = do
         
         --renderMap (passColours world (gamePass state)) start end
         
-        renderPoints (concat paths)
+        --renderPoints (concat paths)
         renderContent world start end 
         
         renderTasks (mapSize world) graph tasks
