@@ -5,6 +5,8 @@ module Ant.Search
     , search
     , searchPath
     
+    , searchN
+    
     )
     
     where
@@ -46,11 +48,14 @@ insertMin node p = Q.alter alter node where
     alter Nothing    = Just p
 {-# INLINE insertMin #-}    
     
-    
-    
 search :: (Ord m) => (SearchNode -> [SearchNode]) -> (SearchNode -> m) -> Int -> [SearchNode]
-search succ metric r = search (S.singleton r) (Q.singleton node0 (metric node0)) where
-    node0 = SearchNode r 0 Nothing
+search succ metric r = searchN succ metric [r]
+    
+searchN :: (Ord m) => (SearchNode -> [SearchNode]) -> (SearchNode -> m) -> [Int] -> [SearchNode]
+searchN succ metric rs = search (S.fromList rs) (Q.fromList (map toPriorityNode rs)) where
+    
+    toPriorityNode r = node :-> metric node
+        where node = SearchNode r 0 Nothing           
           
     search seen queue  | Nothing                      <- view = []
                        | Just ((node :-> _), queue')  <- view = next node seen queue'                    
